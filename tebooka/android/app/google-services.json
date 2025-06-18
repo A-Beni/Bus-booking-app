@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "786108870539",
+    "project_id": "tebooka",
+    "storage_bucket": "tebooka.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:786108870539:android:6b9a8aef050f4f95d5c98e",
+        "android_client_info": {
+          "package_name": "com.adoris.tebooka"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqDzHyciuNK3-44mOJLn57-K04F5IJoM0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
