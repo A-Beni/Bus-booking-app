@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/colors.dart';
 import '../services/auth_service.dart';
 import 'login.dart';
+import 'email_verification_handler.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -26,10 +27,16 @@ class _SignInPageState extends State<SignInPage> {
     setState(() => isLoading = false);
 
     if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(result)));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Registration successful")));
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              "Registration successful. Check your email for verification.")));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const EmailVerificationHandlerPage()),
+      );
     }
   }
 
@@ -43,30 +50,37 @@ class _SignInPageState extends State<SignInPage> {
           child: SingleChildScrollView(
             child: Column(
               children: [
-                const Text('Create an Account', style: TextStyle(color: kWhite, fontSize: 30)),
+                const Text('Create an Account',
+                    style: TextStyle(color: kWhite, fontSize: 30)),
                 const SizedBox(height: 20),
                 TextField(
                   controller: emailController,
                   style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: kWhite)),
+                  decoration: const InputDecoration(
+                      labelText: 'Email', labelStyle: TextStyle(color: kWhite)),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: passwordController,
                   obscureText: true,
                   style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(labelText: 'Password', labelStyle: TextStyle(color: kWhite)),
+                  decoration: const InputDecoration(
+                      labelText: 'Password',
+                      labelStyle: TextStyle(color: kWhite)),
                 ),
                 const SizedBox(height: 20),
                 isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : ElevatedButton(onPressed: signUp, child: const Text('Continue')),
+                    : ElevatedButton(
+                        onPressed: signUp, child: const Text('Continue')),
                 const SizedBox(height: 10),
                 TextButton(
                   onPressed: () {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+                    Navigator.pushReplacement(context,
+                        MaterialPageRoute(builder: (_) => const LoginPage()));
                   },
-                  child: const Text('Already have an account? Log in', style: TextStyle(color: kWhite)),
+                  child: const Text('Already have an account? Log in',
+                      style: TextStyle(color: kWhite)),
                 ),
               ],
             ),

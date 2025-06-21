@@ -10,6 +10,7 @@ class AuthService {
         email: email,
         password: password,
       );
+
       await result.user?.sendEmailVerification(); // Send verification email
       return null;
     } on FirebaseAuthException catch (e) {
@@ -19,19 +20,10 @@ class AuthService {
     }
   }
 
-  // Login existing user and check email verification
+  // Login existing user (email verification check handled elsewhere now)
   Future<String?> signInWithEmail(String email, String password) async {
     try {
-      UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      if (!result.user!.emailVerified) {
-        await _auth.signOut();
-        return 'Please verify your email before logging in.';
-      }
-
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
       return null;
     } on FirebaseAuthException catch (e) {
       return e.message;
@@ -53,11 +45,11 @@ class AuthService {
     }
   }
 
-  // Optional: Sign out
+  // Sign out
   Future<void> signOut() async {
     await _auth.signOut();
   }
 
-  // Optional: Get auth state changes
+  // Auth state stream
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 }
