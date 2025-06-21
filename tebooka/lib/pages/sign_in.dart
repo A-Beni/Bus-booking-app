@@ -12,6 +12,8 @@ class SignInPage extends StatefulWidget {
 }
 
 class _SignInPageState extends State<SignInPage> {
+  final firstNameController = TextEditingController();
+  final lastNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool isLoading = false;
@@ -19,8 +21,18 @@ class _SignInPageState extends State<SignInPage> {
   void signUp() async {
     setState(() => isLoading = true);
 
+    String firstName = firstNameController.text.trim();
+    String lastName = lastNameController.text.trim();
     String email = emailController.text.trim();
     String password = passwordController.text.trim();
+
+    if (firstName.isEmpty || lastName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("First and Last names cannot be empty")),
+      );
+      setState(() => isLoading = false);
+      return;
+    }
 
     String? result = await AuthService().registerWithEmail(email, password);
 
@@ -53,27 +65,60 @@ class _SignInPageState extends State<SignInPage> {
                 const Text('Create an Account',
                     style: TextStyle(color: kWhite, fontSize: 30)),
                 const SizedBox(height: 20),
+
+                // First Name
+                TextField(
+                  controller: firstNameController,
+                  style: const TextStyle(color: kWhite),
+                  decoration: const InputDecoration(
+                    labelText: 'First Name',
+                    labelStyle: TextStyle(color: kWhite),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Last Name
+                TextField(
+                  controller: lastNameController,
+                  style: const TextStyle(color: kWhite),
+                  decoration: const InputDecoration(
+                    labelText: 'Last Name',
+                    labelStyle: TextStyle(color: kWhite),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Email
                 TextField(
                   controller: emailController,
                   style: const TextStyle(color: kWhite),
                   decoration: const InputDecoration(
-                      labelText: 'Email', labelStyle: TextStyle(color: kWhite)),
+                    labelText: 'Email',
+                    labelStyle: TextStyle(color: kWhite),
+                  ),
                 ),
                 const SizedBox(height: 10),
+
+                // Password
                 TextField(
                   controller: passwordController,
                   obscureText: true,
                   style: const TextStyle(color: kWhite),
                   decoration: const InputDecoration(
-                      labelText: 'Password',
-                      labelStyle: TextStyle(color: kWhite)),
+                    labelText: 'Password',
+                    labelStyle: TextStyle(color: kWhite),
+                  ),
                 ),
                 const SizedBox(height: 20),
+
+                // Button
                 isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : ElevatedButton(
                         onPressed: signUp, child: const Text('Continue')),
                 const SizedBox(height: 10),
+
+                // Login Redirect
                 TextButton(
                   onPressed: () {
                     Navigator.pushReplacement(context,
