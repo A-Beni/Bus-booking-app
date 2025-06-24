@@ -4,8 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Register new user, send verification email, and save first & last name to Firestore
-  Future<String?> registerWithEmail(String email, String password, String firstName, String lastName) async {
+  // Register new user, send verification email, and save user details (including role) to Firestore
+  Future<String?> registerWithEmail(
+      String email,
+      String password,
+      String firstName,
+      String lastName,
+      String role) async { // 'role' added here
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -18,6 +23,7 @@ class AuthService {
           'firstName': firstName,
           'lastName': lastName,
           'email': email,
+          'role': role, // Role (passenger/driver) is now stored properly
         });
         await user.sendEmailVerification();
       }

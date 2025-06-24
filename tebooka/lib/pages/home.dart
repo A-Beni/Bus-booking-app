@@ -7,7 +7,9 @@ import 'booking_page.dart';
 import 'login.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final bool showThankYouMessage; // Added for Snackbar from BookingPage
+
+  const HomePage({super.key, this.showThankYouMessage = false});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -25,6 +27,15 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     loadUserData();
+
+    // Show SnackBar if redirected from BookingPage after Notify Driver
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.showThankYouMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Thank you for booking your seats!')),
+        );
+      }
+    });
   }
 
   Future<void> loadUserData() async {
@@ -46,10 +57,8 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Colors.white,
       bottomNavigationBar: BottomNavigationBar(
         items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.logout), label: 'Logout'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.receipt), label: 'View Booking'),
+          BottomNavigationBarItem(icon: Icon(Icons.logout), label: 'Logout'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt), label: 'View Booking'),
         ],
         onTap: (index) async {
           if (index == 0) {
@@ -65,8 +74,8 @@ class _HomePageState extends State<HomePage> {
                 builder: (_) => BookingPage(
                   from: fromCity,
                   to: toCity,
-                  tripDate: tripDate, // fixed parameter name
-                  tripTime: tripTime, // fixed parameter name
+                  tripDate: tripDate,
+                  tripTime: tripTime,
                   seats: seatCount,
                 ),
               ),
@@ -114,7 +123,10 @@ class _HomePageState extends State<HomePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => MapPage(passengerDestination: toCity),
+                    builder: (_) => MapPage(
+                      passengerDestination: toCity,
+                      seats: seatCount, // Pass the seat count properly here
+                    ),
                   ),
                 );
               },
@@ -227,8 +239,7 @@ class _HomePageState extends State<HomePage> {
               });
             }
           },
-          child:
-              Text("${tripTime.hour}:${tripTime.minute.toString().padLeft(2, '0')}"),
+          child: Text("${tripTime.hour}:${tripTime.minute.toString().padLeft(2, '0')}"),
         ),
         const SizedBox(height: 20),
         const Text("How many seats you want?"),
@@ -245,8 +256,7 @@ class _HomePageState extends State<HomePage> {
                   color: seatCount == seat ? Colors.red : Colors.grey[300],
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child:
-                    Text('$seat seat', style: const TextStyle(fontSize: 12)),
+                child: Text('$seat seat', style: const TextStyle(fontSize: 12)),
               ),
             );
           }),

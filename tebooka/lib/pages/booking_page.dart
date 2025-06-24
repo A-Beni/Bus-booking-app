@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'home.dart'; // Adjust this path if needed.
 
 class BookingPage extends StatelessWidget {
   final String from;
@@ -19,6 +22,42 @@ class BookingPage extends StatelessWidget {
     this.distanceKm,
     this.etaMinutes,
   });
+
+  Future<void> notifyDriver(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await FirebaseFirestore.instance.collection('passenger_notifications').doc(uid).set({
+        'from': from,
+        'to': to,
+        'seats': seats,
+        'notifiedAt': DateTime.now(),
+        'notified': true,
+      });
+
+      // Show confirmation dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false, // user must press OK
+        builder: (ctx) => AlertDialog(
+          title: const Text('Notification Sent'),
+          content: const Text('Thank you for booking your seats. Your bus will be here soon.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop(); // close the dialog
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const HomePage(showThankYouMessage: true),
+                  ),
+                );
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +102,12 @@ class BookingPage extends StatelessWidget {
                   Text("ETA: $etaMinutes minutes",
                       style: const TextStyle(fontSize: 18)),
                 ],
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => notifyDriver(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Notify Driver'),
+                ),
               ],
             ),
           ),

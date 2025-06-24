@@ -35,8 +35,9 @@ class _SignInPageState extends State<SignInPage> {
       return;
     }
 
+    // ✅ Corrected: Passing lastName and role
     String? result = await AuthService()
-        .registerWithEmail(email, password, firstName, role);
+        .registerWithEmail(email, password, firstName, lastName, role);
 
     setState(() => isLoading = false);
 
@@ -117,18 +118,21 @@ class _SignInPageState extends State<SignInPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Register as: ", style: TextStyle(color: kWhite)),
+                    const Text("Register as: ",
+                        style: TextStyle(color: kWhite)),
                     DropdownButton<String>(
                       dropdownColor: kBlue,
                       value: role,
                       items: const [
                         DropdownMenuItem(
                           value: 'passenger',
-                          child: Text('Passenger', style: TextStyle(color: Colors.white)),
+                          child: Text('Passenger',
+                              style: TextStyle(color: Colors.white)),
                         ),
                         DropdownMenuItem(
                           value: 'driver',
-                          child: Text('Driver', style: TextStyle(color: Colors.white)),
+                          child: Text('Driver',
+                              style: TextStyle(color: Colors.white)),
                         ),
                       ],
                       onChanged: (value) {

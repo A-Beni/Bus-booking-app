@@ -3,11 +3,17 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'booking_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MapPage extends StatefulWidget {
   final String passengerDestination;
+  final int seats; // NEW: receive seats from HomePage
 
-  const MapPage({super.key, required this.passengerDestination});
+  const MapPage({
+    super.key,
+    required this.passengerDestination,
+    required this.seats, // required for booking
+  });
 
   @override
   State<MapPage> createState() => _MapPageState();
@@ -20,6 +26,9 @@ class _MapPageState extends State<MapPage> {
   double distanceInKm = 0.0;
   int estimatedTimeInMin = 0;
   bool _locationPermissionGranted = false;
+
+  LatLng? _selectedPickup;
+  String nearestDriverFrom = "Unknown";
 
   @override
   void initState() {
@@ -38,13 +47,40 @@ class _MapPageState extends State<MapPage> {
         permission == LocationPermission.whileInUse) {
       setState(() => _locationPermissionGranted = true);
       _getNearbyDrivers();
+      _setPassengerLocation();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('Location permission is required to find nearby buses.')),
+          content: Text('Location permission is required to find nearby buses.'),
+        ),
       );
     }
+  }
+
+  Future<void> _setPassengerLocation() async {
+    Position pos = await Geolocator.getCurrentPosition();
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('passengers').doc(user.uid).set({
+        'latitude': pos.latitude,
+        'longitude': pos.longitude,
+        'destination': widget.passengerDestination,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  void _updateManualPickup(LatLng position) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('passengers').doc(user.uid).update({
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+      });
+    }
+    setState(() {
+      _selectedPickup = position;
+    });
   }
 
   void _getNearbyDrivers() async {
@@ -54,12 +90,12 @@ class _MapPageState extends State<MapPage> {
         .listen((snapshot) async {
       Set<Marker> tempMarkers = {};
       Position userPos = await Geolocator.getCurrentPosition();
+      double minDistance = double.infinity;
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
         if (data['isLive'] == true && data['to'] == widget.passengerDestination) {
-          final LatLng driverPos =
-              LatLng(data['latitude'], data['longitude']);
+          final LatLng driverPos = LatLng(data['latitude'], data['longitude']);
           double distanceMeters = Geolocator.distanceBetween(
             userPos.latitude,
             userPos.longitude,
@@ -67,10 +103,10 @@ class _MapPageState extends State<MapPage> {
             driverPos.longitude,
           );
 
-          setState(() {
-            distanceInKm = distanceMeters / 1000;
-            estimatedTimeInMin = (distanceInKm / 0.5 * 60).toInt();
-          });
+          if (distanceMeters < minDistance) {
+            minDistance = distanceMeters;
+            nearestDriverFrom = data['from'] ?? "Unknown";
+          }
 
           tempMarkers.add(
             Marker(
@@ -88,6 +124,8 @@ class _MapPageState extends State<MapPage> {
       }
 
       setState(() {
+        distanceInKm = minDistance / 1000;
+        estimatedTimeInMin = (distanceInKm / 0.5 * 60).toInt();
         busMarkers = tempMarkers;
       });
     });
@@ -110,11 +148,11 @@ class _MapPageState extends State<MapPage> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => BookingPage(
-                      from: "Unknown", // since 'from' is not passed here
+                      from: nearestDriverFrom,
                       to: widget.passengerDestination,
-                      tripDate: DateTime.now(), // you can pass real date if available
-                      tripTime: TimeOfDay.now(), // you can pass real time if available
-                      seats: 1, // default seat as 1
+                      tripDate: DateTime.now(),
+                      tripTime: TimeOfDay.now(),
+                      seats: widget.seats, // Pass correct seat value
                       distanceKm: distanceInKm,
                       etaMinutes: estimatedTimeInMin,
                     ),
@@ -133,9 +171,22 @@ class _MapPageState extends State<MapPage> {
                     target: _kigaliCenter,
                     zoom: 12,
                   ),
-                  markers: busMarkers,
+                  markers: {
+                    ...busMarkers,
+                    if (_selectedPickup != null)
+                      Marker(
+                        markerId: const MarkerId('pickup'),
+                        position: _selectedPickup!,
+                        icon: BitmapDescriptor.defaultMarkerWithHue(
+                            BitmapDescriptor.hueGreen),
+                        infoWindow: const InfoWindow(title: 'Your Pickup'),
+                      )
+                  },
                   onMapCreated: (GoogleMapController controller) {
                     mapController = controller;
+                  },
+                  onTap: (LatLng pos) {
+                    _updateManualPickup(pos);
                   },
                 ),
                 Positioned(
