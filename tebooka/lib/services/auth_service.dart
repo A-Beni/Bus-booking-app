@@ -1,17 +1,26 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Register new user and send verification email
-  Future<String?> registerWithEmail(String email, String password) async {
+  // Register new user, send verification email, and save first & last name to Firestore
+  Future<String?> registerWithEmail(String email, String password, String firstName, String lastName) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      await result.user?.sendEmailVerification(); // Send verification email
+      User? user = result.user;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': email,
+        });
+        await user.sendEmailVerification();
+      }
       return null;
     } on FirebaseAuthException catch (e) {
       return e.message;
@@ -20,7 +29,7 @@ class AuthService {
     }
   }
 
-  // Login existing user (email verification check handled elsewhere now)
+  // Login existing user
   Future<String?> signInWithEmail(String email, String password) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
@@ -37,7 +46,7 @@ class AuthService {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
-  // Resend email verification to currently signed-in user
+  // Resend email verification to current user
   Future<void> resendVerificationEmail(String email) async {
     final user = _auth.currentUser;
     if (user != null && !user.emailVerified) {

@@ -4,6 +4,9 @@ import '../utils/colors.dart';
 import '../services/auth_service.dart';
 import 'sign_in.dart';
 import 'home.dart';
+import 'driver_home.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -53,7 +56,15 @@ class _LoginPageState extends State<LoginPage> {
     if (result != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
     } else {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final data = userDoc.data();
+
+      if (data != null && data['role'] == 'driver') {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DriverHomePage()));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+      }
     }
   }
 

@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'home.dart';
 import 'login.dart';
+import 'driver_home.dart';
 
 class EmailVerificationHandlerPage extends StatefulWidget {
   const EmailVerificationHandlerPage({super.key});
 
   @override
-  State<EmailVerificationHandlerPage> createState() => _EmailVerificationHandlerPageState();
+  State<EmailVerificationHandlerPage> createState() =>
+      _EmailVerificationHandlerPageState();
 }
 
-class _EmailVerificationHandlerPageState extends State<EmailVerificationHandlerPage> {
+class _EmailVerificationHandlerPageState
+    extends State<EmailVerificationHandlerPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   @override
@@ -28,10 +32,23 @@ class _EmailVerificationHandlerPageState extends State<EmailVerificationHandlerP
       user = _auth.currentUser;
 
       if (user!.emailVerified) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        final role = doc.data()?['role'] ?? 'passenger';
+
+        if (role == 'driver') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const DriverHomePage()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomePage()),
+          );
+        }
         return;
       }
     }

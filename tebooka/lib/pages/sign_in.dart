@@ -16,6 +16,7 @@ class _SignInPageState extends State<SignInPage> {
   final lastNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  String role = 'passenger'; // Default role
   bool isLoading = false;
 
   void signUp() async {
@@ -34,7 +35,8 @@ class _SignInPageState extends State<SignInPage> {
       return;
     }
 
-    String? result = await AuthService().registerWithEmail(email, password);
+    String? result = await AuthService()
+        .registerWithEmail(email, password, firstName, role);
 
     setState(() => isLoading = false);
 
@@ -111,18 +113,50 @@ class _SignInPageState extends State<SignInPage> {
                 ),
                 const SizedBox(height: 20),
 
+                // Role selection
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text("Register as: ", style: TextStyle(color: kWhite)),
+                    DropdownButton<String>(
+                      dropdownColor: kBlue,
+                      value: role,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'passenger',
+                          child: Text('Passenger', style: TextStyle(color: Colors.white)),
+                        ),
+                        DropdownMenuItem(
+                          value: 'driver',
+                          child: Text('Driver', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          role = value!;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
                 // Button
                 isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : ElevatedButton(
-                        onPressed: signUp, child: const Text('Continue')),
+                        onPressed: signUp,
+                        child: const Text('Continue'),
+                      ),
                 const SizedBox(height: 10),
 
                 // Login Redirect
                 TextButton(
                   onPressed: () {
-                    Navigator.pushReplacement(context,
-                        MaterialPageRoute(builder: (_) => const LoginPage()));
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                    );
                   },
                   child: const Text('Already have an account? Log in',
                       style: TextStyle(color: kWhite)),
