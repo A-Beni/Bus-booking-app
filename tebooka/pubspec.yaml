@@ -17,8 +17,13 @@ dependencies:
   google_maps_flutter: ^2.5.0
   geolocator: ^11.0.0
   location: ^5.0.3
-
+  
+  
+  vector_math: ^2.1.2
+  barcode_widget: ^2.0.1
+  
   cupertino_icons: ^1.0.6
+  
 
 dev_dependencies:
   flutter_test:

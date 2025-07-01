@@ -3,6 +3,8 @@ import '../utils/colors.dart';
 import '../services/auth_service.dart';
 import 'login.dart';
 import 'email_verification_handler.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 🔥 Added
+import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 Added
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -45,6 +47,19 @@ class _SignInPageState extends State<SignInPage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(result)));
     } else {
+      // 🔥 Save user info to Firestore after successful registration
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': email,
+          'role': role,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
               "Registration successful. Check your email for verification.")));

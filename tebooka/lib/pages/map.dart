@@ -115,6 +115,23 @@ class _MapPageState extends State<MapPage> {
               infoWindow: InfoWindow(
                 title: data['name'],
                 snippet: 'From ${data['from']} to ${data['to']}',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BookingPage(
+                        from: data['from'],
+                        to: data['to'],
+                        tripDate: DateTime.now(),
+                        tripTime: TimeOfDay.now(),
+                        seats: widget.seats,
+                        distanceKm: minDistance / 1000,
+                        etaMinutes: (minDistance / 500 * 60).toInt(),
+                        driverId: doc.id,
+                      ),
+                    ),
+                  );
+                },
               ),
               icon: BitmapDescriptor.defaultMarkerWithHue(
                   BitmapDescriptor.hueBlue),
@@ -155,6 +172,7 @@ class _MapPageState extends State<MapPage> {
                       seats: widget.seats, // Pass correct seat value
                       distanceKm: distanceInKm,
                       etaMinutes: estimatedTimeInMin,
+                      driverId: '',
                     ),
                   ),
                 );

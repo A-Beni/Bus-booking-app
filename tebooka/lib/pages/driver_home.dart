@@ -23,9 +23,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
     'Kicukiro Bus Stop'
   ];
 
-  Future<void> updateLocation() async {
+  Future<void> updateLocationAndGoLive() async {
     Position pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
+
     String uid = FirebaseAuth.instance.currentUser!.uid;
 
     await FirebaseFirestore.instance.collection('drivers').doc(uid).set({
@@ -33,7 +34,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
       'longitude': pos.longitude,
       'from': from,
       'to': to,
-      'isLive': isLive,
+      'isLive': true,
       'name': 'Driver',
     });
   }
@@ -81,7 +82,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
               onPressed: () async {
                 if (from.isEmpty || to.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select both locations')),
+                    const SnackBar(
+                        content: Text('Please select both locations')),
                   );
                   return;
                 }
@@ -97,27 +99,22 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   permissionGranted = await location.requestPermission();
                   if (permissionGranted != loc.PermissionStatus.granted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Location permission is required to go live')),
+                      const SnackBar(
+                          content: Text(
+                              'Location permission is required to go live')),
                     );
                     return;
                   }
                 }
 
-                final uid = FirebaseAuth.instance.currentUser!.uid;
-                await FirebaseFirestore.instance.collection('drivers').doc(uid).set({
-                  'latitude': 0.0,
-                  'longitude': 0.0,
-                  'from': from,
-                  'to': to,
-                  'isLive': true,
-                  'name': 'Driver',
-                });
+                await updateLocationAndGoLive();
 
                 showDialog(
                   context: context,
                   builder: (_) => AlertDialog(
                     title: const Text('You Are Live!'),
-                    content: const Text('Passengers can now see your location.'),
+                    content: const Text(
+                        'Passengers can now see your location.'),
                     actions: [
                       TextButton(
                         onPressed: () {
@@ -125,7 +122,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => DriverMapPage(from: from, to: to),
+                              builder: (_) =>
+                                  DriverMapPage(from: from, to: to),
                             ),
                           );
                         },
@@ -135,6 +133,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   ),
                 );
               },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               child: const Text('Go Live (Share Location)'),
             ),
 
