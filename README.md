@@ -1,188 +1,132 @@
-🚌 TEBOOKA – Real-Time Bus Booking App
-TEBOOKA is a real-time Flutter-based bus booking application designed to simplify public transport for users in Kigali, Rwanda. It enables users to register with email, view available buses on a map, select seats, confirm bookings, and view their tickets.
+# TEBOOKA – Real-Time Bus Booking App
 
-📱 Features
-User Authentication
+**TEBOOKA** is a real-time bus ticketing app designed for efficient, secure, and user-friendly transportation booking in Rwanda. Built using **Flutter** and **Firebase**, the app allows passengers to book bus seats in advance, view nearby drivers, select seats visually, and receive digital tickets instantly.
 
-Email and password registration & login (Firebase Auth)
+---
 
-Email verification (Firebase Email Templates)
+## ✨ Features
 
-Password reset
+* 🔐 **Email-based Authentication**
 
-Remember me option using SharedPreferences
+  * Sign up and log in via email & password.
+  * Email verification is enforced for secure access.
+  * Forgot password & email verification resending supported.
 
-Booking System
+* 🗘️ **Map Integration**
 
-Real-time driver & bus discovery
+  * View nearby available buses (drivers) based on geolocation.
+  * Tap a driver to view details and proceed with booking.
 
-Seat selection with reserved seats shown
+* 🎟️ **Seat Selection**
 
-Booking confirmation and Firestore ticket creation
+  * Visual 3D seat layout for intuitive selection.
+  * Real-time seat availability to avoid double booking.
+  * Dynamic seat count and booking restriction (e.g. max N seats).
 
-Cancel & Edit booking (Edit allowed only 10 minutes before departure)
+* 🧏️ **Booking Summary & Confirmation**
 
-Ticket Management
+  * View trip summary, driver info, distance, and ETA.
+  * Cancel or edit bookings (within a 10-minute window before departure).
+  * Booking generates a digital ticket with QR code.
 
-View ticket after booking
+* 📩 **Email Notifications**
 
-Ticket includes QR code, fare, seat number, trip info, and driver details
+  * Confirmation sent via email after booking.
+  * Driver gets notified of new passenger.
 
-Driver Integration
+---
 
-Driver details (name, phone) loaded from Firestore
+## 🧑‍💻 Tech Stack
 
-Driver gets notified via data storage (future: push notification)
+| Category             | Tools & Libraries                         |
+| -------------------- | ----------------------------------------- |
+| Framework            | Flutter                                   |
+| Backend-as-a-Service | Firebase (Auth, Firestore, Dynamic Links) |
+| Maps & Location      | Google Maps API                           |
+| State Management     | `setState` (light), FutureBuilder         |
+| Seat Selection       | Custom widgets + Grid layout              |
+| Authentication       | FirebaseAuth with email/password          |
 
+---
 
-🔐 Firebase Setup Instructions
-Create Firebase Project
+## 🔐 Authentication Flow
 
-Go to Firebase Console
+* User signs up with email → Receives verification email.
+* Cannot log in unless the email is verified.
+* Can resend verification link or reset password.
+* Firebase handles session state and security.
 
-Create a project called TEBOOKA
+---
 
-Add an Android app with package name com.adoris.tebooka
+## 🧭 Navigation Flow
 
-Enable Authentication
+```
+SignInPage/RegisterPage
+    ↓
+HomePage (Google Maps + Nearby Buses)
+    ↓
+MapPage (Driver List + Distance & ETA)
+    ↓
+BookingPage (Trip Summary, Select Seats, Confirm)
+    ↓
+TicketPage (Digital Ticket Display with QR)
+```
 
-Go to Authentication > Sign-in Method
+---
 
-Enable Email/Password
+## 📦 Firestore Collections Overview
 
-Optionally set up email templates for verification
+* **users**:
 
-Enable Firestore
+  * `uid`, `email`, `displayName`
 
-Go to Firestore Database > Create database
+* **drivers**:
 
-Choose test mode for development
+  * `driverId`, `name`, `phone`, `location`, `availability`
 
-Set security rules properly for production
+* **tickets**:
 
-Firebase Dynamic Links (for email verification)
+  * `passengerId`, `from`, `to`, `tripDate`, `tripTime`, `seatNumber`, `driverId`, `timestamp`, `fare`
 
-Go to Engage > Dynamic Links
+---
 
-Create domain: https://tebooka.page.link
+## 📲 Firebase Configuration & Deployment
 
-Add it to the email verification template
+### 🔧 Firebase Setup
 
-Add Firebase SDK to Flutter
+1. Create a Firebase Project at [console.firebase.google.com](https://console.firebase.google.com).
+2. Enable:
 
-In Flutter project root:
+   * **Authentication > Email/Password**
+   * **Firestore Database**
+   * **Firebase Dynamic Links** (optional for future deep linking)
+3. Add your Android/iOS app:
 
-bash
-Copy
-Edit
-flutter pub add firebase_core firebase_auth cloud_firestore firebase_dynamic_links shared_preferences
-Initialize Firebase in main.dart
+   * Use your app's package name (`com.adoris.tebooka`)
+   * Download the `google-services.json` or `GoogleService-Info.plist` file and place it in your project
 
-dart
-Copy
-Edit
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(MyApp());
-}
-▶️ How to Run the App Locally
-Clone the Repository
+### 🚀 Deploy the App
 
-bash
-Copy
-Edit
-git clone https://github.com/your-username/tebooka.git
-cd tebooka
-Install Packages
+1. Run `flutter build apk` for Android
 
-bash
-Copy
-Edit
-flutter pub get
-Run the App
+2. Use `flutterfire configure` to link Firebase to the Flutter app
 
-bash
-Copy
-Edit
-flutter run
-🚀 Firebase Hosting (Optional for Admin Panel or Web Version)
-Note: If deploying a web admin or Flutter web version.
+3. Deploy your Firestore rules and indexes:
 
-Install Firebase CLI
+   ```bash
+   firebase deploy --only firestore
+   ```
 
-bash
-Copy
-Edit
-npm install -g firebase-tools
-firebase login
-Initialize Hosting
+4. Use Firebase Hosting (optional) if building a Flutter web version
 
-bash
-Copy
-Edit
-firebase init hosting
-Build Web App
+---
 
-bash
-Copy
-Edit
-flutter build web
-Deploy
+## 📅 Contributors
 
-bash
-Copy
-Edit
-firebase deploy
-📦 Firestore Collections (Schema)
-drivers
-json
-Copy
-Edit
-{
-  "name": "John Doe",
-  "phone": "+250788000000",
-  "location": { "lat": 1.94, "lng": 30.06 }
-}
-tickets
-json
-Copy
-Edit
-{
-  "passengerId": "uid",
-  "from": "Nyabugogo",
-  "to": "Kimironko",
-  "tripDate": "2025-07-01",
-  "tripTime": "12:30",
-  "seats": 2,
-  "seatNumber": 12,
-  "fare": 800.0,
-  "driverId": "driverUID",
-  "timestamp": "2025-07-01T08:00:00Z"
-}
-⚙️ Environment Config (Optional)
-Create a .env file if needed using flutter_dotenv:
+* Adoris Ngoga
 
-env
-Copy
-Edit
-FIREBASE_API_KEY=xxx
-FIREBASE_PROJECT_ID=tebooka
-💡 Future Improvements
-Push notifications to drivers (using Firebase Messaging)
+---
 
-Payment gateway integration (MTN Mobile Money, Airtel Pay)
+## ✨ License
 
-Admin dashboard (Flutter Web or React)
-
-Real-time location tracking of buses
-
-Chat between passenger and driver
-
-👤 Contributors
-Adoris Ngoga
-
-📄 License
-This project is open-source and licensed under the MIT License.
-
-
+This project is licensed under the MIT License.
