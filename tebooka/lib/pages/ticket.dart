@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:barcode_widget/barcode_widget.dart';
+import 'tickets_history.dart'; // Added for navigation
 
 class TicketPage extends StatefulWidget {
   final String from;
@@ -44,9 +45,14 @@ class _TicketPageState extends State<TicketPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      setState(() {
-        passengerName = doc.data()?['firstName'] ?? 'Passenger';
-      });
+      final data = doc.data();
+      if (data != null) {
+        final firstName = data['firstName'] ?? '';
+        final lastName = data['lastName'] ?? '';
+        setState(() {
+          passengerName = '$firstName $lastName'.trim();
+        });
+      }
     }
   }
 
@@ -112,24 +118,33 @@ class _TicketPageState extends State<TicketPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('From', style: TextStyle(color: Colors.grey[600])),
-                        Text(widget.from, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text(tripTimeStr),
-                        Text(tripDateStr),
-                      ],
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('From', style: TextStyle(color: Colors.grey[600])),
+                          Text(widget.from, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(tripTimeStr),
+                          Text(tripDateStr),
+                        ],
+                      ),
                     ),
                     const Icon(Icons.directions_bus, size: 30),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('To', style: TextStyle(color: Colors.grey[600])),
-                        Text(widget.to, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text(tripTimeStr),
-                        Text(tripDateStr),
-                      ],
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('To', style: TextStyle(color: Colors.grey[600])),
+                          Wrap(
+                            alignment: WrapAlignment.end,
+                            children: [
+                              Text(widget.to, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          Text(tripTimeStr),
+                          Text(tripDateStr),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -187,6 +202,17 @@ class _TicketPageState extends State<TicketPage> {
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const TicketsHistoryPage()),
+          );
+        },
+        icon: const Icon(Icons.history),
+        label: const Text('History'),
+        backgroundColor: Colors.blueAccent,
       ),
     );
   }
