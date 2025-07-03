@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <application
         android:label="tebooka"
         android:name="${applicationName}"
@@ -45,4 +48,15 @@
             <data android:mimeType="text/plain" />
         </intent>
     </queries>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
+    </queries>
+
 </manifest>

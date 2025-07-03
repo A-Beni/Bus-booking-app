@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
@@ -26,11 +25,13 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Required for image_picker and url_launcher on Android 13+
+        resourceConfigurations += listOf("en")
     }
 
     buildTypes {
         release {
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -41,12 +42,14 @@ flutter {
 }
 
 dependencies {
-    // Import the Firebase BoM (Bill of Materials)
+    // Firebase BoM for consistent versioning
     implementation(platform("com.google.firebase:firebase-bom:33.15.0"))
 
-    // Required Firebase SDKs
+    // Firebase SDKs
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-firestore")
 
-    // Add any other Firebase dependencies as needed.
+    // Other dependencies handled via pubspec.yaml (image_picker, url_launcher)
 }

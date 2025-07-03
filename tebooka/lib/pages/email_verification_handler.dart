@@ -10,12 +10,10 @@ class EmailVerificationHandlerPage extends StatefulWidget {
   const EmailVerificationHandlerPage({super.key});
 
   @override
-  State<EmailVerificationHandlerPage> createState() =>
-      _EmailVerificationHandlerPageState();
+  State<EmailVerificationHandlerPage> createState() => _EmailVerificationHandlerPageState();
 }
 
-class _EmailVerificationHandlerPageState
-    extends State<EmailVerificationHandlerPage> {
+class _EmailVerificationHandlerPageState extends State<EmailVerificationHandlerPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   @override
@@ -32,10 +30,7 @@ class _EmailVerificationHandlerPageState
       user = _auth.currentUser;
 
       if (user!.emailVerified) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
         final role = doc.data()?['role'] ?? 'passenger';
 
         if (role == 'driver') {
@@ -46,7 +41,12 @@ class _EmailVerificationHandlerPageState
         } else {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const HomePage()),
+            MaterialPageRoute(
+              builder: (_) => HomePage(
+                isDarkMode: false,
+                onThemeChanged: (value) {},
+              ),
+            ),
           );
         }
         return;

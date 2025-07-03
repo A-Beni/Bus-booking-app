@@ -12,8 +12,15 @@ import 'notifications_page.dart'; // Make sure this file exists
 
 class HomePage extends StatefulWidget {
   final bool showThankYouMessage;
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
 
-  const HomePage({super.key, this.showThankYouMessage = false});
+  const HomePage({
+    super.key,
+    this.showThankYouMessage = false,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -261,7 +268,12 @@ class _HomePageState extends State<HomePage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const ProfilePage()),
+                        MaterialPageRoute(
+                          builder: (_) => ProfilePage(
+                            isDarkMode: widget.isDarkMode,
+                            onThemeChanged: widget.onThemeChanged,
+                          ),
+                        ),
                       );
                     },
                     child: const CircleAvatar(

@@ -61,9 +61,20 @@ class _LoginPageState extends State<LoginPage> {
       final data = userDoc.data();
 
       if (data != null && data['role'] == 'driver') {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DriverHomePage()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DriverHomePage()),
+        );
       } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HomePage(
+              isDarkMode: false,
+              onThemeChanged: (value) {},
+            ),
+          ),
+        );
       }
     }
   }

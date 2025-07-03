@@ -14,22 +14,39 @@ class TicketsHistoryPage extends StatelessWidget {
         .collection('tickets')
         .where('passengerId', isEqualTo: uid)
         .orderBy('timestamp', descending: true)
-        .limit(10)
         .get();
 
-    final seenIds = <String>{}; // avoid accidental duplicate docs
-    final tickets = <Map<String, dynamic>>[];
+    final seenTripKeys = <String>{};
+    final allTickets = snapshot.docs;
 
-    for (final doc in snapshot.docs) {
-      if (!seenIds.contains(doc.id)) {
-        final data = doc.data();
+    List<Map<String, dynamic>> uniqueTickets = [];
+
+    for (final doc in allTickets) {
+      final data = doc.data();
+      final from = data['from'] ?? '';
+      final to = data['to'] ?? '';
+      final tripDate = (data['tripDate'] as Timestamp).toDate();
+      final tripTime = data['tripTime'] ?? '';
+      final uniqueKey = '$from-$to-${tripDate.toIso8601String()}-$tripTime';
+
+      if (!seenTripKeys.contains(uniqueKey)) {
         data['id'] = doc.id;
-        tickets.add(data);
-        seenIds.add(doc.id);
+        uniqueTickets.add(data);
+        seenTripKeys.add(uniqueKey);
+      }
+
+      // If we already have 10 unique tickets, stop here
+      if (uniqueTickets.length >= 10) break;
+    }
+
+    // FIFO logic: Delete tickets beyond the 10 most recent (optional)
+    if (uniqueTickets.length == 10 && allTickets.length > 10) {
+      for (int i = 10; i < allTickets.length; i++) {
+        await allTickets[i].reference.delete();
       }
     }
 
-    return tickets;
+    return uniqueTickets;
   }
 
   @override
@@ -85,7 +102,7 @@ class TicketsHistoryPage extends StatelessWidget {
                           to: to,
                           tripDate: tripDate,
                           tripTime: TimeOfDay(hour: hour, minute: minute),
-                          selectedSeats: [seatNumber],
+                          selectedSeats: [seatNumber ?? 1],
                           fare: fare,
                           driverId: driverId,
                         ),
