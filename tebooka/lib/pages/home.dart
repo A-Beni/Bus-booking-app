@@ -4,17 +4,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_place/google_place.dart';
 import 'package:uuid/uuid.dart';
 
-
 import 'profile.dart';
 import 'map.dart';
 import 'booking_page.dart';
 import 'login.dart';
+import 'notifications_page.dart'; // Make sure this file exists
 
 class HomePage extends StatefulWidget {
   final bool showThankYouMessage;
-  
+
   const HomePage({super.key, this.showThankYouMessage = false});
-  
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -26,16 +26,16 @@ class _HomePageState extends State<HomePage> {
   DateTime? tripDate;
   TimeOfDay? tripTime;
   int seatCount = 1;
-  
+
   final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
-  
+
   @override
   void initState() {
     super.initState();
     loadUserData();
     tripDate = DateTime.now();
     tripTime = TimeOfDay.now();
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.showThankYouMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -44,7 +44,7 @@ class _HomePageState extends State<HomePage> {
       }
     });
   }
-  
+
   Future<void> loadUserData() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -54,13 +54,12 @@ class _HomePageState extends State<HomePage> {
       });
     }
   }
-  
+
   Future<void> openSearchModal(TextEditingController controller) async {
     final googlePlace = GooglePlace(googleApiKey);
     final sessionToken = const Uuid().v4();
     TextEditingController searchController = TextEditingController(text: controller.text);
     List<AutocompletePrediction> predictions = [];
-
 
     await showModalBottomSheet(
       isScrollControlled: true,
@@ -105,16 +104,6 @@ class _HomePageState extends State<HomePage> {
                               location: LatLon(-1.9441, 30.0619), // Kigali center
                               radius: 20000, // 20 km
                             );
-
-                            print('Search input: $input');
-                            print('API Response status: ${result?.status}');
-                            print('Number of predictions: ${result?.predictions?.length ?? 0}');
-
-                            if (result?.predictions != null) {
-                              for (var pred in result!.predictions!) {
-                                print('Prediction: ${pred.description}');
-                              }
-                            }
 
                             if (result != null && result.predictions != null && result.predictions!.isNotEmpty) {
                               localSetState(() => predictions = result.predictions!);
@@ -192,37 +181,65 @@ class _HomePageState extends State<HomePage> {
           iconSize: 20,
           selectedFontSize: 12,
           unselectedFontSize: 12,
+          type: BottomNavigationBarType.fixed,
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.logout), label: 'Logout'),
             BottomNavigationBarItem(icon: Icon(Icons.receipt), label: 'Booking'),
+            BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
+            BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Notifications'),
+            BottomNavigationBarItem(icon: Icon(Icons.logout), label: 'Logout'),
           ],
           onTap: (index) async {
-            if (index == 0) {
-              await FirebaseAuth.instance.signOut();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-              );
-            } else if (index == 1) {
-              if (fromController.text.isEmpty || toController.text.isEmpty || tripDate == null || tripTime == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Please complete the trip details")),
-                );
-                return;
-              }
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BookingPage(
-                    from: fromController.text.trim(),
-                    to: toController.text.trim(),
-                    tripDate: tripDate!,
-                    tripTime: tripTime!,
-                    seats: seatCount,
+            switch (index) {
+              case 0:
+                if (fromController.text.isEmpty || toController.text.isEmpty || tripDate == null || tripTime == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please complete the trip details")),
+                  );
+                  return;
+                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BookingPage(
+                      from: fromController.text.trim(),
+                      to: toController.text.trim(),
+                      tripDate: tripDate!,
+                      tripTime: tripTime!,
+                      seats: seatCount,
+                    ),
                   ),
-                ),
-              );
+                );
+                break;
+              case 1:
+                if (toController.text.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MapPage(
+                        passengerDestination: toController.text.trim(),
+                        seats: seatCount,
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please select destination first")),
+                  );
+                }
+                break;
+              case 2:
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => NotificationsPage()),
+                );
+                break;
+              case 3:
+                await FirebaseAuth.instance.signOut();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                );
+                break;
             }
           },
         ),
