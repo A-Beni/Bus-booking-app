@@ -3,7 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:location/location.dart' as loc;
+
 import 'driver_map.dart';
+import 'driver_profile.dart';
+import 'users.dart';
+import 'login.dart';
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
@@ -23,9 +27,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
     'Kicukiro Bus Stop'
   ];
 
+  int _selectedIndex = 1;
+
   Future<void> updateLocationAndGoLive() async {
     Position pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
+      desiredAccuracy: LocationAccuracy.high,
+    );
 
     String uid = FirebaseAuth.instance.currentUser!.uid;
 
@@ -39,10 +46,60 @@ class _DriverHomePageState extends State<DriverHomePage> {
     });
   }
 
+  void _onNavTapped(int index) async {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    switch (index) {
+      case 0:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => UsersPage(from: from, to: to), 
+          ),
+        );
+        break;
+      case 1:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DriverMapPage(from: from, to: to),
+          ),
+        );
+        break;
+      case 2:
+        final navigator = Navigator.of(context);
+        await FirebaseAuth.instance.signOut();
+        navigator.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => LoginPage(
+              isDarkMode: false,
+              onThemeChanged: (_) {},
+            ),
+          ),
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Driver Dashboard')),
+      appBar: AppBar(
+        title: const Text('Driver Dashboard'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DriverProfilePage()),
+              );
+            },
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -56,13 +113,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
               items: stops
                   .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                   .toList(),
-              onChanged: (val) {
-                setState(() => from = val!);
-              },
+              onChanged: (val) => setState(() => from = val!),
             ),
-
             const SizedBox(height: 20),
-
             const Text("Select To:", style: TextStyle(fontSize: 18)),
             const SizedBox(height: 10),
             DropdownButton<String>(
@@ -71,13 +124,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
               items: stops
                   .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                   .toList(),
-              onChanged: (val) {
-                setState(() => to = val!);
-              },
+              onChanged: (val) => setState(() => to = val!),
             ),
-
             const SizedBox(height: 30),
-
             ElevatedButton(
               onPressed: () async {
                 if (from.isEmpty || to.isEmpty) {
@@ -113,8 +162,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   context: context,
                   builder: (_) => AlertDialog(
                     title: const Text('You Are Live!'),
-                    content: const Text(
-                        'Passengers can now see your location.'),
+                    content: const Text('Passengers can now see your location.'),
                     actions: [
                       TextButton(
                         onPressed: () {
@@ -136,9 +184,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               child: const Text('Go Live (Share Location)'),
             ),
-
             const SizedBox(height: 20),
-
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () async {
@@ -158,6 +204,25 @@ class _DriverHomePageState extends State<DriverHomePage> {
             ),
           ],
         ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onNavTapped,
+        selectedItemColor: Colors.green,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.group),
+            label: 'Users',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.map),
+            label: 'Map',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.logout),
+            label: 'Logout',
+          ),
+        ],
       ),
     );
   }
