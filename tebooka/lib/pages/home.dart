@@ -8,18 +8,18 @@ import 'profile.dart';
 import 'map.dart';
 import 'booking_page.dart';
 import 'login.dart';
-import 'notifications_page.dart'; // Make sure this file exists
+import 'notifications_page.dart';
 
 class HomePage extends StatefulWidget {
-  final bool showThankYouMessage;
   final bool isDarkMode;
   final Function(bool) onThemeChanged;
+  final bool showThankYouMessage;
 
   const HomePage({
     super.key,
-    this.showThankYouMessage = false,
     required this.isDarkMode,
     required this.onThemeChanged,
+    this.showThankYouMessage = false,
   });
 
   @override
@@ -108,8 +108,8 @@ class _HomePageState extends State<HomePage> {
                               input,
                               sessionToken: sessionToken,
                               components: [Component("country", "rw")],
-                              location: LatLon(-1.9441, 30.0619), // Kigali center
-                              radius: 20000, // 20 km
+                              location: LatLon(-1.9441, 30.0619),
+                              radius: 20000,
                             );
 
                             if (result != null && result.predictions != null && result.predictions!.isNotEmpty) {
@@ -148,7 +148,7 @@ class _HomePageState extends State<HomePage> {
                                   onTap: () {
                                     controller.text = prediction.description ?? '';
                                     Navigator.pop(context);
-                                    setState(() {}); // Refresh UI after selection
+                                    setState(() {});
                                   },
                                 );
                               },
@@ -180,8 +180,11 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       bottomNavigationBar: SizedBox(
         height: 60,
         child: BottomNavigationBar(
@@ -235,16 +238,13 @@ class _HomePageState extends State<HomePage> {
                 }
                 break;
               case 2:
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => NotificationsPage()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsPage()));
                 break;
               case 3:
                 await FirebaseAuth.instance.signOut();
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  MaterialPageRoute(builder: (_) => LoginPage(isDarkMode: widget.isDarkMode, onThemeChanged: widget.onThemeChanged)),
                 );
                 break;
             }
@@ -260,20 +260,12 @@ class _HomePageState extends State<HomePage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    "Hey, $firstName",
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
+                  Text("Hey, $firstName", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                   GestureDetector(
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => ProfilePage(
-                            isDarkMode: widget.isDarkMode,
-                            onThemeChanged: widget.onThemeChanged,
-                          ),
-                        ),
+                        MaterialPageRoute(builder: (_) => ProfilePage(isDarkMode: widget.isDarkMode, onThemeChanged: widget.onThemeChanged)),
                       );
                     },
                     child: const CircleAvatar(
@@ -285,13 +277,13 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               const SizedBox(height: 8),
-              const Text("What is your next trip?", style: TextStyle(fontSize: 14, color: Colors.grey)),
+              Text("What is your next trip?", style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.6))),
               const SizedBox(height: 14),
               Container(
                 height: 180,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
+                  color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(12),
                 ),
                 alignment: Alignment.center,
@@ -348,7 +340,7 @@ class _HomePageState extends State<HomePage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -373,7 +365,7 @@ class _HomePageState extends State<HomePage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(

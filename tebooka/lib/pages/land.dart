@@ -4,7 +4,14 @@ import '../utils/colors.dart';
 import 'sign_in.dart';
 
 class LandPage extends StatefulWidget {
-  const LandPage({super.key});
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
+
+  const LandPage({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
   State<LandPage> createState() => _LandPageState();
@@ -17,7 +24,12 @@ class _LandPageState extends State<LandPage> {
     Future.delayed(const Duration(seconds: 6), () {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const SignInPage()),
+        MaterialPageRoute(
+          builder: (context) => SignInPage(
+            isDarkMode: widget.isDarkMode,
+            onThemeChanged: widget.onThemeChanged,
+          ),
+        ),
       );
     });
   }
@@ -28,9 +40,8 @@ class _LandPageState extends State<LandPage> {
       backgroundColor: kBlue,
       body: Center(
         child: Column(
-          mainAxisSize: MainAxisSize.min, // Make the column take minimal space vertically
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // TEBOOKA Text
             const Text(
               'TEBOOKA',
               style: TextStyle(
@@ -39,10 +50,7 @@ class _LandPageState extends State<LandPage> {
                 color: kWhite,
               ),
             ),
-
-            const SizedBox(height: 7), // exactly 7 pixels gap below TEBOOKA logo
-
-            // Lottie Animation - Bus
+            const SizedBox(height: 7),
             Lottie.network(
               'https://lottie.host/9d606b14-a944-455e-8fc1-e2bdc29a08ec/VaJRPPJQnB.json',
               width: 200,

@@ -31,10 +31,12 @@ class _ProfilePageState extends State<ProfilePage> {
   String? imageUrl;
   String busPlate = '';
   bool loadingImage = false;
+  bool? _darkMode; // Changed from late to nullable to avoid LateInitializationError
 
   @override
   void initState() {
     super.initState();
+    _darkMode = widget.isDarkMode; // Initialize safely
     fetchUserProfile();
   }
 
@@ -208,8 +210,13 @@ class _ProfilePageState extends State<ProfilePage> {
                       const SizedBox(width: 10),
                       const Text("Dark Mode"),
                       Switch(
-                        value: widget.isDarkMode,
-                        onChanged: widget.onThemeChanged,
+                        value: _darkMode ?? false,
+                        onChanged: (value) {
+                          setState(() {
+                            _darkMode = value;
+                          });
+                          widget.onThemeChanged(value);
+                        },
                       ),
                     ],
                   ),

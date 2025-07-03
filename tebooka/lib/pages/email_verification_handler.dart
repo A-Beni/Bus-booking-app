@@ -7,13 +7,22 @@ import 'login.dart';
 import 'driver_home.dart';
 
 class EmailVerificationHandlerPage extends StatefulWidget {
-  const EmailVerificationHandlerPage({super.key});
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
+
+  const EmailVerificationHandlerPage({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
-  State<EmailVerificationHandlerPage> createState() => _EmailVerificationHandlerPageState();
+  State<EmailVerificationHandlerPage> createState() =>
+      _EmailVerificationHandlerPageState();
 }
 
-class _EmailVerificationHandlerPageState extends State<EmailVerificationHandlerPage> {
+class _EmailVerificationHandlerPageState
+    extends State<EmailVerificationHandlerPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   @override
@@ -26,11 +35,14 @@ class _EmailVerificationHandlerPageState extends State<EmailVerificationHandlerP
     User? user = _auth.currentUser;
 
     if (user != null) {
-      await user.reload(); // Refresh the email verification status
+      await user.reload(); // Refresh email verification status
       user = _auth.currentUser;
 
       if (user!.emailVerified) {
-        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
         final role = doc.data()?['role'] ?? 'passenger';
 
         if (role == 'driver') {
@@ -43,8 +55,8 @@ class _EmailVerificationHandlerPageState extends State<EmailVerificationHandlerP
             context,
             MaterialPageRoute(
               builder: (_) => HomePage(
-                isDarkMode: false,
-                onThemeChanged: (value) {},
+                isDarkMode: widget.isDarkMode,
+                onThemeChanged: widget.onThemeChanged,
               ),
             ),
           );
@@ -55,7 +67,12 @@ class _EmailVerificationHandlerPageState extends State<EmailVerificationHandlerP
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
+      MaterialPageRoute(
+        builder: (_) => LoginPage(
+          isDarkMode: widget.isDarkMode,
+          onThemeChanged: widget.onThemeChanged,
+        ),
+      ),
     );
   }
 

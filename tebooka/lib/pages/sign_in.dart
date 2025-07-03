@@ -3,11 +3,18 @@ import '../utils/colors.dart';
 import '../services/auth_service.dart';
 import 'login.dart';
 import 'email_verification_handler.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // 🔥 Added
-import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 Added
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SignInPage extends StatefulWidget {
-  const SignInPage({super.key});
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
+
+  const SignInPage({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
   State<SignInPage> createState() => _SignInPageState();
@@ -37,7 +44,6 @@ class _SignInPageState extends State<SignInPage> {
       return;
     }
 
-    // ✅ Corrected: Passing lastName and role
     String? result = await AuthService()
         .registerWithEmail(email, password, firstName, lastName, role);
 
@@ -47,7 +53,6 @@ class _SignInPageState extends State<SignInPage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(result)));
     } else {
-      // 🔥 Save user info to Firestore after successful registration
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -65,7 +70,12 @@ class _SignInPageState extends State<SignInPage> {
               "Registration successful. Check your email for verification.")));
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const EmailVerificationHandlerPage()),
+        MaterialPageRoute(
+          builder: (_) => EmailVerificationHandlerPage(
+            isDarkMode: widget.isDarkMode,
+            onThemeChanged: widget.onThemeChanged,
+          ),
+        ),
       );
     }
   }
@@ -174,7 +184,12 @@ class _SignInPageState extends State<SignInPage> {
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                      MaterialPageRoute(
+                        builder: (_) => LoginPage(
+                          isDarkMode: widget.isDarkMode,
+                          onThemeChanged: widget.onThemeChanged,
+                        ),
+                      ),
                     );
                   },
                   child: const Text('Already have an account? Log in',

@@ -9,7 +9,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
+
+  const LoginPage({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -70,8 +77,8 @@ class _LoginPageState extends State<LoginPage> {
           context,
           MaterialPageRoute(
             builder: (_) => HomePage(
-              isDarkMode: false,
-              onThemeChanged: (value) {},
+              isDarkMode: widget.isDarkMode,
+              onThemeChanged: widget.onThemeChanged,
             ),
           ),
         );
@@ -159,7 +166,15 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 10),
                 TextButton(
                   onPressed: () {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SignInPage()));
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SignInPage(
+                          isDarkMode: widget.isDarkMode,
+                          onThemeChanged: widget.onThemeChanged,
+                        ),
+                      ),
+                    );
                   },
                   child: const Text('Don\'t have an account? Sign up', style: TextStyle(color: kWhite)),
                 ),

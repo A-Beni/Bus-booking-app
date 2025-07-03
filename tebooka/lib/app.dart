@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'pages/land.dart';
 import 'pages/home.dart';
 import 'pages/login.dart';
@@ -40,18 +41,27 @@ class _AppState extends State<App> {
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: const LandPage(),
+      home: LandPage(
+        isDarkMode: _isDarkMode,
+        onThemeChanged: _toggleTheme,
+      ),
       routes: {
         '/home': (context) => HomePage(
-              onThemeChanged: _toggleTheme,
               isDarkMode: _isDarkMode,
+              onThemeChanged: _toggleTheme,
             ),
-        '/login': (context) => const LoginPage(),
+        '/login': (context) => LoginPage(
+              isDarkMode: _isDarkMode,
+              onThemeChanged: _toggleTheme,
+            ),
         '/profile': (context) => ProfilePage(
-              onThemeChanged: _toggleTheme,
               isDarkMode: _isDarkMode,
+              onThemeChanged: _toggleTheme,
             ),
-        '/verify-check': (context) => const EmailVerificationHandlerPage(),
+        '/verify-check': (context) => EmailVerificationHandlerPage(
+              isDarkMode: _isDarkMode,
+              onThemeChanged: _toggleTheme,
+            ),
       },
     );
   }
