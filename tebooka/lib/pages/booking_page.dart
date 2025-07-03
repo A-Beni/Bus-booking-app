@@ -1,13 +1,17 @@
+// File: lib/booking_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_place/google_place.dart';
+import 'package:uuid/uuid.dart';
+
 import 'ticket.dart';
-import 'home.dart';
 import 'seat_selection.dart';
 
 class BookingPage extends StatefulWidget {
-  final String from, to;
+  final String from;
+  final String to;
   final DateTime tripDate;
   final TimeOfDay tripTime;
   final int seats;
@@ -32,12 +36,26 @@ class BookingPage extends StatefulWidget {
 }
 
 class _BookingPageState extends State<BookingPage> {
+  final _formKey = GlobalKey<FormState>();
+
+  late TextEditingController _fromController;
+  late TextEditingController _toController;
+  late DateTime _tripDate;
+  late TimeOfDay _tripTime;
+  int _seats = 1;
   List<int> selectedSeats = [];
   String? driverName, driverPhone;
+
+  final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
 
   @override
   void initState() {
     super.initState();
+    _fromController = TextEditingController(text: widget.from);
+    _toController = TextEditingController(text: widget.to);
+    _tripDate = widget.tripDate;
+    _tripTime = widget.tripTime;
+    _seats = widget.seats;
     if (widget.driverId != null) _loadDriverDetails(widget.driverId!);
   }
 
@@ -51,57 +69,29 @@ class _BookingPageState extends State<BookingPage> {
     }
   }
 
-  bool canModifyBooking() {
-    final dt = DateTime(
-      widget.tripDate.year,
-      widget.tripDate.month,
-      widget.tripDate.day,
-      widget.tripTime.hour,
-      widget.tripTime.minute,
+  Future<void> _pickDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _tripDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    return DateTime.now().isBefore(dt.subtract(const Duration(minutes: 10)));
+    if (picked != null) {
+      setState(() {
+        _tripDate = picked;
+      });
+    }
   }
 
-  Future<void> _cancelBooking() async {
-    if (!canModifyBooking()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Cannot cancel booking less than 10 mins to departure'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
+  Future<void> _pickTime() async {
+    final TimeOfDay? picked = await showTimePicker(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Cancel Booking?'),
-        content: const Text('Really cancel this booking?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
-        ],
-      ),
+      initialTime: _tripTime,
     );
-
-    if (confirmed == true) {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      final q = await FirebaseFirestore.instance
-          .collection('tickets')
-          .where('passengerId', isEqualTo: uid)
-          .where('tripDate', isEqualTo: Timestamp.fromDate(widget.tripDate))
-          .get();
-
-      for (var d in q.docs) {
-        await d.reference.delete();
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Booking canceled')),
-      );
-
-      Navigator.pop(context);
+    if (picked != null) {
+      setState(() {
+        _tripTime = picked;
+      });
     }
   }
 
@@ -110,9 +100,9 @@ class _BookingPageState extends State<BookingPage> {
 
     final booked = await FirebaseFirestore.instance
         .collection('tickets')
-        .where('from', isEqualTo: widget.from)
-        .where('to', isEqualTo: widget.to)
-        .where('tripDate', isEqualTo: Timestamp.fromDate(widget.tripDate))
+        .where('from', isEqualTo: _fromController.text.trim())
+        .where('to', isEqualTo: _toController.text.trim())
+        .where('tripDate', isEqualTo: Timestamp.fromDate(_tripDate))
         .get();
 
     for (var doc in booked.docs) {
@@ -123,13 +113,13 @@ class _BookingPageState extends State<BookingPage> {
       context,
       MaterialPageRoute(
         builder: (_) => SeatSelectionPage(
-          seatCount: widget.seats,
+          seatCount: _seats,
           reservedSeats: reserved,
         ),
       ),
     );
 
-    if (result != null && result.length == widget.seats) {
+    if (result != null && result.length == _seats) {
       setState(() {
         selectedSeats = result;
       });
@@ -144,14 +134,11 @@ class _BookingPageState extends State<BookingPage> {
       for (var seat in selectedSeats) {
         final ticket = <String, dynamic>{
           'passengerId': uid,
-          'from': widget.from,
-          'to': widget.to,
-          'seats': widget.seats,
-          'tripDate': Timestamp.fromDate(widget.tripDate),
-          'tripTime': TimeOfDay(
-            hour: widget.tripTime.hour,
-            minute: widget.tripTime.minute,
-          ).format(context),
+          'from': _fromController.text.trim(),
+          'to': _toController.text.trim(),
+          'seats': _seats,
+          'tripDate': Timestamp.fromDate(_tripDate),
+          'tripTime': _tripTime.format(context),
           'seatNumber': seat,
           'timestamp': Timestamp.now(),
           'fare': fare,
@@ -180,10 +167,10 @@ class _BookingPageState extends State<BookingPage> {
         context,
         MaterialPageRoute(
           builder: (_) => TicketPage(
-            from: widget.from,
-            to: widget.to,
-            tripDate: widget.tripDate,
-            tripTime: widget.tripTime,
+            from: _fromController.text.trim(),
+            to: _toController.text.trim(),
+            tripDate: _tripDate,
+            tripTime: _tripTime,
             selectedSeats: selectedSeats,
             fare: fare,
             driverId: widget.driverId ?? '',
@@ -200,14 +187,77 @@ class _BookingPageState extends State<BookingPage> {
     }
   }
 
-  Widget _infoRow(String label, String value) {
+  Future<void> _selectPlace(TextEditingController controller) async {
+    final googlePlace = GooglePlace(googleApiKey);
+    final sessionToken = const Uuid().v4();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        TextEditingController search = TextEditingController();
+        List<AutocompletePrediction> predictions = [];
+
+        return StatefulBuilder(builder: (context, setState) {
+          Future<void> onChanged(String val) async {
+            if (val.isNotEmpty) {
+              final res = await googlePlace.autocomplete.get(val, sessionToken: sessionToken);
+              if (res != null && res.predictions != null) {
+                setState(() {
+                  predictions = res.predictions!;
+                });
+              }
+            }
+          }
+
+          return AlertDialog(
+            title: const Text("Search location"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  autofocus: true,
+                  controller: search,
+                  onChanged: onChanged,
+                  decoration: const InputDecoration(hintText: "Enter place"),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 200,
+                  child: ListView.builder(
+                    itemCount: predictions.length,
+                    itemBuilder: (context, index) {
+                      final p = predictions[index];
+                      return ListTile(
+                        title: Text(p.description ?? ''),
+                        onTap: () {
+                          Navigator.pop(context, p.description);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        });
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        controller.text = result;
+      });
+    }
+  }
+
+  Widget _infoRow(String label, Widget child) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text("$label:", style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text(value),
+          Expanded(child: Align(alignment: Alignment.centerRight, child: child)),
         ],
       ),
     );
@@ -219,60 +269,88 @@ class _BookingPageState extends State<BookingPage> {
       appBar: AppBar(title: const Text('Bus Ticket'), backgroundColor: Colors.red),
       body: Center(
         child: SingleChildScrollView(
-          child: Card(
-            margin: const EdgeInsets.all(20),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            elevation: 8,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  const Text("🚌 Booking Summary", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  _infoRow("From", widget.from),
-                  _infoRow("To", widget.to),
-                  _infoRow("Date", "${widget.tripDate.day}/${widget.tripDate.month}/${widget.tripDate.year}"),
-                  _infoRow("Time", "${widget.tripTime.hour}:${widget.tripTime.minute.toString().padLeft(2, '0')}"),
-                  _infoRow("Seats", "${widget.seats}"),
-                  if (widget.distanceKm != null)
-                    _infoRow("Distance", "${widget.distanceKm!.toStringAsFixed(2)} km"),
-                  if (widget.etaMinutes != null)
-                    _infoRow("ETA", "${widget.etaMinutes} min"),
-                  if (driverName != null)
-                    _infoRow("Driver", "$driverName (${driverPhone ?? 'N/A'})"),
-                  if (selectedSeats.isNotEmpty)
-                    _infoRow("Your Seats", selectedSeats.map((e) => 'A$e').join(', ')),
+          child: Form(
+            key: _formKey,
+            child: Card(
+              margin: const EdgeInsets.all(20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              elevation: 8,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    const Text("🚌 Booking Summary", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
 
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _goToSeatSelection,
-                    child: const Text('Select Seat(s)'),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: selectedSeats.length == widget.seats ? () => notifyDriver(context) : null,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                    child: const Text('Notify Driver & Confirm'),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: canModifyBooking() ? _cancelBooking : null,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
-                    child: const Text('Cancel Booking'),
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: canModifyBooking()
-                        ? () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Editing coming soon!')),
-                            );
+                    _infoRow(
+                      "From",
+                      TextButton(
+                        onPressed: () => _selectPlace(_fromController),
+                        child: Text(_fromController.text.isEmpty ? "Select From" : _fromController.text),
+                      ),
+                    ),
+                    _infoRow(
+                      "To",
+                      TextButton(
+                        onPressed: () => _selectPlace(_toController),
+                        child: Text(_toController.text.isEmpty ? "Select To" : _toController.text),
+                      ),
+                    ),
+
+                    _infoRow(
+                      "Date",
+                      TextButton(
+                        onPressed: _pickDate,
+                        child: Text("${_tripDate.day}/${_tripDate.month}/${_tripDate.year}"),
+                      ),
+                    ),
+                    _infoRow(
+                      "Time",
+                      TextButton(
+                        onPressed: _pickTime,
+                        child: Text("${_tripTime.hour}:${_tripTime.minute.toString().padLeft(2, '0')}"),
+                      ),
+                    ),
+                    _infoRow(
+                      "Seats",
+                      DropdownButton<int>(
+                        value: _seats,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _seats = value;
+                              selectedSeats.clear();
+                            });
                           }
-                        : null,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                    child: const Text('Edit Booking'),
-                  ),
-                ],
+                        },
+                        items: List.generate(10, (i) => i + 1)
+                            .map((e) => DropdownMenuItem(value: e, child: Text("$e")))
+                            .toList(),
+                      ),
+                    ),
+
+                    if (widget.distanceKm != null)
+                      _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
+                    if (widget.etaMinutes != null)
+                      _infoRow("ETA", Text("${widget.etaMinutes} min")),
+                    if (driverName != null)
+                      _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
+                    if (selectedSeats.isNotEmpty)
+                      _infoRow("Your Seats", Text(selectedSeats.map((e) => 'A$e').join(', '))),
+
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: _goToSeatSelection,
+                      child: const Text('Select Seat(s)'),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: selectedSeats.length == _seats ? () => notifyDriver(context) : null,
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                      child: const Text('Notify Driver & Confirm'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

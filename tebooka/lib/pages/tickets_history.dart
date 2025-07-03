@@ -17,11 +17,19 @@ class TicketsHistoryPage extends StatelessWidget {
         .limit(10)
         .get();
 
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      data['id'] = doc.id;
-      return data;
-    }).toList();
+    final seenIds = <String>{}; // avoid accidental duplicate docs
+    final tickets = <Map<String, dynamic>>[];
+
+    for (final doc in snapshot.docs) {
+      if (!seenIds.contains(doc.id)) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        tickets.add(data);
+        seenIds.add(doc.id);
+      }
+    }
+
+    return tickets;
   }
 
   @override
@@ -61,7 +69,7 @@ class TicketsHistoryPage extends StatelessWidget {
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
-                  title: Text("ID: $id"),
+                  title: Text("Ticket ID: $id"),
                   subtitle: Text("Route: $from → $to"),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {

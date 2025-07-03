@@ -7,12 +7,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class MapPage extends StatefulWidget {
   final String passengerDestination;
-  final int seats; // NEW: receive seats from HomePage
+  final int seats;
 
   const MapPage({
     super.key,
     required this.passengerDestination,
-    required this.seats, // required for booking
+    required this.seats,
   });
 
   @override
@@ -29,6 +29,7 @@ class _MapPageState extends State<MapPage> {
 
   LatLng? _selectedPickup;
   String nearestDriverFrom = "Unknown";
+  String nearestDriverId = ''; // ✅ NEW: to store the correct driverId
 
   @override
   void initState() {
@@ -91,6 +92,8 @@ class _MapPageState extends State<MapPage> {
       Set<Marker> tempMarkers = {};
       Position userPos = await Geolocator.getCurrentPosition();
       double minDistance = double.infinity;
+      String closestDriverId = '';
+      String closestFrom = 'Unknown';
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
@@ -105,7 +108,8 @@ class _MapPageState extends State<MapPage> {
 
           if (distanceMeters < minDistance) {
             minDistance = distanceMeters;
-            nearestDriverFrom = data['from'] ?? "Unknown";
+            closestFrom = data['from'] ?? "Unknown";
+            closestDriverId = doc.id;
           }
 
           tempMarkers.add(
@@ -125,16 +129,15 @@ class _MapPageState extends State<MapPage> {
                         tripDate: DateTime.now(),
                         tripTime: TimeOfDay.now(),
                         seats: widget.seats,
-                        distanceKm: minDistance / 1000,
-                        etaMinutes: (minDistance / 500 * 60).toInt(),
+                        distanceKm: distanceMeters / 1000,
+                        etaMinutes: (distanceMeters / 500 * 60).toInt(),
                         driverId: doc.id,
                       ),
                     ),
                   );
                 },
               ),
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueBlue),
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
             ),
           );
         }
@@ -143,6 +146,8 @@ class _MapPageState extends State<MapPage> {
       setState(() {
         distanceInKm = minDistance / 1000;
         estimatedTimeInMin = (distanceInKm / 0.5 * 60).toInt();
+        nearestDriverFrom = closestFrom;
+        nearestDriverId = closestDriverId; // ✅ Save it for icon tap
         busMarkers = tempMarkers;
       });
     });
@@ -161,6 +166,15 @@ class _MapPageState extends State<MapPage> {
               icon: const Icon(Icons.confirmation_num),
               tooltip: 'Book Now',
               onPressed: () {
+                if (nearestDriverId.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("❗ No available drivers found"),
+                    ),
+                  );
+                  return;
+                }
+
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -169,10 +183,10 @@ class _MapPageState extends State<MapPage> {
                       to: widget.passengerDestination,
                       tripDate: DateTime.now(),
                       tripTime: TimeOfDay.now(),
-                      seats: widget.seats, // Pass correct seat value
+                      seats: widget.seats,
                       distanceKm: distanceInKm,
                       etaMinutes: estimatedTimeInMin,
-                      driverId: '',
+                      driverId: nearestDriverId, // ✅ Correct driver ID now
                     ),
                   ),
                 );
