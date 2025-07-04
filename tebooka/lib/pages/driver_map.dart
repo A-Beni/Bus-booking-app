@@ -1,11 +1,14 @@
+import 'dart:convert';
 import 'dart:math';
-import 'dart:ui' as ui;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:location/location.dart' as loc;
+import 'package:http/http.dart' as http;
+import 'package:google_place/google_place.dart';
 
 class DriverMapPage extends StatefulWidget {
   final String from;
@@ -23,88 +26,66 @@ class _DriverMapPageState extends State<DriverMapPage> {
   LatLng _currentPosition = const LatLng(-1.9706, 30.1044);
   bool _isLocationEnabled = false;
   Set<Polyline> _polylines = {};
+  Set<Marker> _markers = {};
   BitmapDescriptor? _busIcon;
   BitmapDescriptor? _passengerIcon;
+  BitmapDescriptor? _startIcon;
+  BitmapDescriptor? _endIcon;
+
   int nearbyPassengerCount = 0;
   Set<Marker> passengerMarkers = {};
   int totalPassengersOnRoute = 0;
 
-  final Map<String, LatLng> busStops = {
-    'Kimironko Bus Stop': const LatLng(-1.935, 30.091),
-    'Downtown Bus Stop': const LatLng(-1.949, 30.058),
-    'Kicukiro Bus Stop': const LatLng(-1.967, 30.09),
-  };
+  double totalRouteDistance = 0;
+  double remainingDistance = 0;
+  String eta = '...';
+
+  final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
 
   @override
   void initState() {
     super.initState();
     _loadIcons();
     _enableLocation();
-    _setupRoute();
-    _getAllPassengerMarkers(); // load once at start
+    _drawRouteAndDistance();
+    _getAllPassengerMarkers();
   }
 
   Future<void> _loadIcons() async {
     _busIcon = await _createIcon(Icons.directions_bus, Colors.blue);
     _passengerIcon = await _createIcon(Icons.person_pin_circle, Colors.green);
+    _startIcon = await _createIcon(Icons.my_location, Colors.green);
+    _endIcon = await _createIcon(Icons.flag, Colors.red);
   }
 
   Future<BitmapDescriptor> _createIcon(IconData icon, Color color) async {
-    final ui.PictureRecorder recorder = ui.PictureRecorder();
-    final Canvas canvas = Canvas(recorder);
-    const Size size = Size(100, 100);
-    const double iconSize = 80.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    const size = Size(100, 100);
+    const iconSize = 80.0;
 
-    final TextPainter textPainter = TextPainter(textDirection: TextDirection.ltr);
-    textPainter.text = TextSpan(
-      text: String.fromCharCode(icon.codePoint),
-      style: TextStyle(
-        fontSize: iconSize,
-        fontFamily: icon.fontFamily,
-        package: icon.fontPackage,
-        color: color,
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(fontSize: iconSize, fontFamily: icon.fontFamily, color: color),
       ),
+      textDirection: TextDirection.ltr,
     );
+
     textPainter.layout();
     textPainter.paint(canvas, Offset((size.width - iconSize) / 2, (size.height - iconSize) / 2));
-
-    final ui.Image img = await recorder.endRecording().toImage(size.width.toInt(), size.height.toInt());
-    final ByteData? data = await img.toByteData(format: ui.ImageByteFormat.png);
+    final img = await recorder.endRecording().toImage(size.width.toInt(), size.height.toInt());
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
   }
 
   Future<void> _enableLocation() async {
-    bool serviceEnabled = await location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await location.requestService();
+    if (!await location.serviceEnabled()) await location.requestService();
+    if (await location.hasPermission() == loc.PermissionStatus.denied) {
+      await location.requestPermission();
     }
-
-    var permissionGranted = await location.hasPermission();
-    if (permissionGranted == loc.PermissionStatus.denied) {
-      permissionGranted = await location.requestPermission();
-      if (permissionGranted != loc.PermissionStatus.granted) return;
-    }
-
     setState(() => _isLocationEnabled = true);
     _listenToLocationChanges();
-  }
-
-  void _setupRoute() {
-    final fromPos = busStops[widget.from];
-    final toPos = busStops[widget.to];
-
-    if (fromPos != null && toPos != null) {
-      setState(() {
-        _polylines = {
-          Polyline(
-            polylineId: const PolylineId('route'),
-            color: Colors.blue,
-            width: 5,
-            points: [fromPos, toPos],
-          )
-        };
-      });
-    }
   }
 
   void _listenToLocationChanges() {
@@ -114,7 +95,6 @@ class _DriverMapPageState extends State<DriverMapPage> {
       if (uid == null) return;
 
       _currentPosition = LatLng(locData.latitude!, locData.longitude!);
-
       await FirebaseFirestore.instance.collection('drivers').doc(uid).update({
         'latitude': locData.latitude,
         'longitude': locData.longitude,
@@ -125,51 +105,101 @@ class _DriverMapPageState extends State<DriverMapPage> {
       });
 
       _controller?.animateCamera(CameraUpdate.newLatLng(_currentPosition));
-      _checkNearbyPassengers();
       _getAllPassengerMarkers();
+      _checkNearbyPassengers();
+      _updateRemainingDistance();
     });
   }
 
-  void _checkNearbyPassengers() async {
-    QuerySnapshot snapshot = await FirebaseFirestore.instance
-        .collection('passenger_locations')
-        .where('to', isEqualTo: widget.to)
-        .get();
+  Future<void> _drawRouteAndDistance() async {
+    final origin = await _getLatLngFromPlace(widget.from);
+    final destination = await _getLatLngFromPlace(widget.to);
 
-    int count = 0;
-    for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      double? lat = data['latitude'];
-      double? lng = data['longitude'];
-      if (lat != null && lng != null) {
-        double distance = _calculateDistance(
-            _currentPosition.latitude, _currentPosition.longitude, lat, lng);
-        if (distance <= 100) {
-          count++;
-        }
-      }
-    }
+    if (origin == null || destination == null) return;
 
+    final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$googleApiKey&traffic_model=best_guess&departure_time=now');
+
+    final response = await http.get(url);
+    if (response.statusCode != 200) return;
+
+    final data = json.decode(response.body);
+    final route = data['routes'][0];
+    final polylinePoints = route['overview_polyline']['points'];
+    final leg = route['legs'][0];
+
+    totalRouteDistance = leg['distance']['value'] / 1000;
+    remainingDistance = totalRouteDistance;
+    eta = leg['duration_in_traffic']?['text'] ?? leg['duration']['text'];
+
+    final points = _decodePolyline(polylinePoints);
     setState(() {
-      nearbyPassengerCount = count;
+      _polylines = {
+        Polyline(
+          polylineId: const PolylineId('route'),
+          color: Colors.blue,
+          width: 5,
+          points: points,
+        ),
+      };
+
+      _markers.addAll({
+        Marker(
+          markerId: const MarkerId('start'),
+          position: origin,
+          icon: _startIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: 'Start'),
+        ),
+        Marker(
+          markerId: const MarkerId('end'),
+          position: destination,
+          icon: _endIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: const InfoWindow(title: 'Destination'),
+        ),
+      });
     });
+  }
+
+  Future<LatLng?> _getLatLngFromPlace(String place) async {
+    final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json?address=${Uri.encodeComponent(place)}&key=$googleApiKey');
+    final response = await http.get(url);
+    if (response.statusCode != 200) return null;
+
+    final data = json.decode(response.body);
+    final loc = data['results'][0]['geometry']['location'];
+    return LatLng(loc['lat'], loc['lng']);
+  }
+
+  Future<void> _updateRemainingDistance() async {
+    final dest = await _getLatLngFromPlace(widget.to);
+    if (dest == null) return;
+
+    remainingDistance = _calculateDistance(
+          _currentPosition.latitude,
+          _currentPosition.longitude,
+          dest.latitude,
+          dest.longitude,
+        ) / 1000;
+
+    setState(() {});
   }
 
   Future<void> _getAllPassengerMarkers() async {
-    QuerySnapshot snapshot = await FirebaseFirestore.instance
+    final snapshot = await FirebaseFirestore.instance
         .collection('passenger_locations')
         .where('to', isEqualTo: widget.to)
         .get();
 
     Set<Marker> tempMarkers = {};
     for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       if (data.containsKey('latitude') && data.containsKey('longitude')) {
-        LatLng passengerPos = LatLng(data['latitude'], data['longitude']);
+        LatLng pos = LatLng(data['latitude'], data['longitude']);
         tempMarkers.add(
           Marker(
             markerId: MarkerId('passenger_${doc.id}'),
-            position: passengerPos,
+            position: pos,
             icon: _passengerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
             infoWindow: const InfoWindow(title: 'Pickup'),
           ),
@@ -180,6 +210,28 @@ class _DriverMapPageState extends State<DriverMapPage> {
     setState(() {
       passengerMarkers = tempMarkers;
       totalPassengersOnRoute = snapshot.docs.length;
+    });
+  }
+
+  void _checkNearbyPassengers() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('passenger_locations')
+        .where('to', isEqualTo: widget.to)
+        .get();
+
+    int count = 0;
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      double? lat = data['latitude'];
+      double? lng = data['longitude'];
+      if (lat != null && lng != null) {
+        double distance = _calculateDistance(_currentPosition.latitude, _currentPosition.longitude, lat, lng);
+        if (distance <= 100) count++;
+      }
+    }
+
+    setState(() {
+      nearbyPassengerCount = count;
     });
   }
 
@@ -196,6 +248,37 @@ class _DriverMapPageState extends State<DriverMapPage> {
 
   double _deg2rad(double deg) => deg * (pi / 180);
 
+  List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> points = [];
+    int index = 0, len = encoded.length;
+    int lat = 0, lng = 0;
+
+    while (index < len) {
+      int b, shift = 0, result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : result >> 1);
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : result >> 1);
+      lng += dlng;
+
+      points.add(LatLng(lat / 1E5, lng / 1E5));
+    }
+
+    return points;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -204,10 +287,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
           ? Stack(
               children: [
                 GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: _currentPosition,
-                    zoom: 15,
-                  ),
+                  initialCameraPosition: CameraPosition(target: _currentPosition, zoom: 15),
                   markers: {
                     Marker(
                       markerId: const MarkerId('driver'),
@@ -215,6 +295,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
                       icon: _busIcon ?? BitmapDescriptor.defaultMarker,
                       infoWindow: const InfoWindow(title: 'Bus Location'),
                     ),
+                    ..._markers,
                     ...passengerMarkers,
                   },
                   polylines: _polylines,
@@ -229,6 +310,8 @@ class _DriverMapPageState extends State<DriverMapPage> {
                       padding: const EdgeInsets.all(8),
                       child: Column(
                         children: [
+                          Text('Remaining: ${remainingDistance.toStringAsFixed(2)} km'),
+                          Text('ETA: $eta'),
                           Text('Nearby (≤100m): $nearbyPassengerCount'),
                           Text('On Route: $totalPassengersOnRoute'),
                         ],
