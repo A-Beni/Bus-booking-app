@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'seat_selection.dart'; // Ensure this file exists
 
 class DriverProfilePage extends StatefulWidget {
   const DriverProfilePage({super.key});
@@ -52,6 +53,18 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
     setState(() => isLoading = false);
   }
 
+  void navigateToSeatSelection() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SeatSelectionPage(
+          reservedSeats: [], // You can fetch and pass real reserved seats if needed
+          seatCount: 60,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -60,9 +73,15 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
           child: Column(children: [
-            const Icon(Icons.directions_bus, size: 80, color: Colors.grey),
+            GestureDetector(
+              onTap: navigateToSeatSelection,
+              child: const Icon(Icons.directions_bus, size: 80, color: Colors.grey),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: busPlateController, decoration: const InputDecoration(labelText: 'Bus Plate')),
+            TextField(
+              controller: busPlateController,
+              decoration: const InputDecoration(labelText: 'Bus Plate'),
+            ),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: uploadDetails,
