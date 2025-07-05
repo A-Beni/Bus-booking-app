@@ -11,7 +11,14 @@ import 'seat_selection.dart';
 import '../utils/colors.dart';
 
 class DriverProfilePage extends StatefulWidget {
-  const DriverProfilePage({super.key});
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
+
+  const DriverProfilePage({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
   State<DriverProfilePage> createState() => _DriverProfilePageState();
@@ -22,16 +29,17 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
   bool isLoading = false;
   bool loadingImage = false;
 
-  String name = '';
+  String fullName = '';
   String email = '';
   String plate = '';
   String? imageUrl;
-  bool isDarkMode = false;
   bool isEditingPlate = false;
+  bool? _darkMode;
 
   @override
   void initState() {
     super.initState();
+    _darkMode = widget.isDarkMode;
     _loadDetails();
   }
 
@@ -43,11 +51,18 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
     });
 
     if (uid != null) {
-      final doc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
-      if (doc.exists) {
-        final data = doc.data()!;
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        final data = userDoc.data()!;
+        final firstName = data['firstName'] ?? '';
+        final lastName = data['lastName'] ?? '';
+        fullName = "$firstName $lastName";
+      }
+
+      final driverDoc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
+      if (driverDoc.exists) {
+        final data = driverDoc.data()!;
         setState(() {
-          name = data['name'] ?? 'Driver';
           plate = data['busPlate'] ?? '';
           imageUrl = data['imageUrl'];
           busPlateController.text = plate;
@@ -136,6 +151,8 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeColor = _darkMode ?? false ? Colors.grey[900] : Colors.white;
+
     return Scaffold(
       backgroundColor: kBlue,
       appBar: AppBar(
@@ -156,6 +173,7 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
       ),
       body: Center(
         child: Card(
+          color: themeColor,
           margin: const EdgeInsets.all(20),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           elevation: 10,
@@ -187,21 +205,20 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text(fullName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text(email, style: const TextStyle(fontSize: 16, color: Colors.grey)),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.verified_user, size: 20),
-                      const SizedBox(width: 6),
-                      const Text("Role: Driver", style: TextStyle(fontSize: 16)),
+                    children: const [
+                      Icon(Icons.verified_user, size: 20),
+                      SizedBox(width: 6),
+                      Text("Role: Driver", style: TextStyle(fontSize: 16)),
                     ],
                   ),
                   const SizedBox(height: 10),
 
-                  /// Bus Plate with edit icon
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -216,7 +233,6 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 10),
 
                   if (isEditingPlate) ...[
@@ -238,6 +254,9 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
                     const SizedBox(height: 20),
                   ],
 
+                  const Icon(Icons.directions_bus_filled, size: 48, color: Colors.teal),
+                  const SizedBox(height: 10),
+
                   ElevatedButton.icon(
                     onPressed: navigateToSeatSelection,
                     icon: const Icon(Icons.event_seat),
@@ -258,9 +277,10 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
                       const SizedBox(width: 10),
                       const Text("Dark Mode"),
                       Switch(
-                        value: isDarkMode,
+                        value: _darkMode ?? false,
                         onChanged: (value) {
-                          setState(() => isDarkMode = value);
+                          setState(() => _darkMode = value);
+                          widget.onThemeChanged(value);
                         },
                       ),
                     ],

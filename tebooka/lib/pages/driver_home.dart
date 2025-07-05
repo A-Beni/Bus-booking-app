@@ -21,7 +21,15 @@ class _DriverHomePageState extends State<DriverHomePage> {
   TextEditingController fromController = TextEditingController();
   TextEditingController toController = TextEditingController();
   int _selectedIndex = 1;
+
   final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
+  bool _darkMode = false;
+
+  void _onThemeChanged(bool value) {
+    setState(() {
+      _darkMode = value;
+    });
+  }
 
   Future<void> updateLocationAndGoLive() async {
     Position pos = await Geolocator.getCurrentPosition(
@@ -48,8 +56,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                UsersPage(from: fromController.text, to: toController.text),
+            builder: (_) => UsersPage(
+              from: fromController.text,
+              to: toController.text,
+              isDarkMode: _darkMode,
+              onThemeChanged: _onThemeChanged,
+            ),
           ),
         );
         break;
@@ -57,8 +69,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                DriverMapPage(from: fromController.text, to: toController.text),
+            builder: (_) => DriverMapPage(
+              from: fromController.text,
+              to: toController.text,
+            ),
           ),
         );
         break;
@@ -67,7 +81,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => LoginPage(isDarkMode: false, onThemeChanged: (_) {}),
+            builder: (_) => LoginPage(
+              isDarkMode: _darkMode,
+              onThemeChanged: _onThemeChanged,
+            ),
           ),
         );
         break;
@@ -141,7 +158,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                                   onTap: () {
                                     controller.text = prediction.description ?? '';
                                     Navigator.pop(context);
-                                    setState(() {}); // refresh UI to update text
+                                    setState(() {});
                                   },
                                 );
                               },
@@ -165,21 +182,29 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.grey[800],
+        color: _darkMode ? Colors.grey[900] : Colors.grey[200],
         borderRadius: BorderRadius.circular(10),
       ),
       width: double.infinity,
       child: Text(
         controller.text.isEmpty ? placeholder : controller.text,
-        style: const TextStyle(fontSize: 14, color: Colors.white),
+        style: TextStyle(
+          fontSize: 14,
+          color: _darkMode ? Colors.white : Colors.black,
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final backgroundColor = _darkMode ? Colors.black : Colors.white;
+    final textColor = _darkMode ? Colors.white : Colors.black;
+
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
+        backgroundColor: _darkMode ? Colors.grey[850] : Colors.teal,
         title: const Text('Driver Dashboard'),
         actions: [
           IconButton(
@@ -187,7 +212,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const DriverProfilePage()),
+                MaterialPageRoute(
+                  builder: (_) => DriverProfilePage(
+                    isDarkMode: _darkMode,
+                    onThemeChanged: _onThemeChanged,
+                  ),
+                ),
               );
             },
           ),
@@ -199,7 +229,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Select From:", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text("Select From:",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: textColor)),
               const SizedBox(height: 10),
               GestureDetector(
                 onTap: () {
@@ -214,7 +246,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 child: buildLocationField(fromController, "Choose starting location"),
               ),
               const SizedBox(height: 20),
-              const Text("Select To:", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text("Select To:",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: textColor)),
               const SizedBox(height: 10),
               GestureDetector(
                 onTap: () {
@@ -289,6 +323,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
         currentIndex: _selectedIndex,
         onTap: _onNavTapped,
         selectedItemColor: Colors.green,
+        backgroundColor: _darkMode ? Colors.grey[900] : Colors.white,
+        selectedLabelStyle: TextStyle(color: textColor),
+        unselectedItemColor: _darkMode ? Colors.grey[500] : Colors.grey[700],
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Users'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),

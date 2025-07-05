@@ -7,8 +7,16 @@ import 'dart:math';
 class UsersPage extends StatefulWidget {
   final String from;
   final String to;
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
 
-  const UsersPage({super.key, required this.from, required this.to});
+  const UsersPage({
+    super.key,
+    required this.from,
+    required this.to,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
   State<UsersPage> createState() => _UsersPageState();
@@ -59,9 +67,13 @@ class _UsersPageState extends State<UsersPage> {
       final to = data['to'];
 
       if (lat != null && lng != null) {
-        final distance = _calculateDistance(driverPosition!.latitude, driverPosition!.longitude, lat, lng);
+        final distance = _calculateDistance(
+          driverPosition!.latitude,
+          driverPosition!.longitude,
+          lat,
+          lng,
+        );
 
-        // Only include passengers within 100 meters and not yet passed
         if (distance > 0 && distance <= 100) {
           passengers.add({
             'distance': distance,
@@ -96,27 +108,39 @@ class _UsersPageState extends State<UsersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nearby Passengers'),
-        backgroundColor: Colors.teal,
+        backgroundColor: theme.appBarTheme.backgroundColor,
       ),
       body: nearbyPassengers.isEmpty
-          ? const Center(child: Text('No nearby passengers found.'))
+          ? Center(
+              child: Text(
+                'No nearby passengers found.',
+                style: TextStyle(color: theme.textTheme.bodyMedium?.color),
+              ),
+            )
           : ListView.builder(
               itemCount: nearbyPassengers.length,
               itemBuilder: (context, index) {
                 final passenger = nearbyPassengers[index];
                 return Card(
+                  color: theme.cardColor,
                   margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: ListTile(
-                    leading: const Icon(Icons.person_pin_circle, color: Colors.green),
-                    title: Text('Destination: ${passenger['to']}'),
+                    leading: Icon(Icons.person_pin_circle,
+                        color: widget.isDarkMode ? Colors.green[300] : Colors.green[700]),
+                    title: Text('Destination: ${passenger['to']}',
+                        style: TextStyle(color: theme.textTheme.bodyMedium?.color)),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Seats: ${passenger['seats']}'),
-                        Text('Distance: ${passenger['distance'].toStringAsFixed(1)} meters'),
+                        Text('Seats: ${passenger['seats']}',
+                            style: TextStyle(color: theme.textTheme.bodyMedium?.color)),
+                        Text('Distance: ${passenger['distance'].toStringAsFixed(1)} meters',
+                            style: TextStyle(color: theme.textTheme.bodyMedium?.color)),
                       ],
                     ),
                   ),

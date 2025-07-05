@@ -12,6 +12,8 @@ class SeatSelectionPage extends StatefulWidget {
   final TimeOfDay? tripTime;
   final double? fare;
   final String? driverId;
+  final bool isDarkMode;
+  final Function(bool)? onThemeChanged;
 
   const SeatSelectionPage({
     super.key,
@@ -23,6 +25,8 @@ class SeatSelectionPage extends StatefulWidget {
     this.tripTime,
     this.fare,
     this.driverId,
+    this.isDarkMode = false,
+    this.onThemeChanged,
   });
 
   @override
@@ -45,7 +49,6 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    // Check user role from users collection
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
     final role = userDoc.data()?['role'];
     setState(() {
@@ -100,7 +103,12 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => UsersPage(from: widget.from!, to: widget.to!),
+            builder: (_) => UsersPage(
+              from: widget.from!,
+              to: widget.to!,
+              isDarkMode: widget.isDarkMode,
+              onThemeChanged: widget.onThemeChanged ?? (_) {},
+            ),
           ),
         );
       } else {
@@ -119,7 +127,6 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
       onTap: () {
         setState(() {
           if (isDriver) {
-            // Toggle seat in selectedSeats
             if (selectedSeats.contains(seatNumber)) {
               selectedSeats.remove(seatNumber);
             } else {
@@ -143,7 +150,9 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           Icon(
             Icons.event_seat,
             color: isReserved
-                ? (isDriver && selectedSeats.contains(seatNumber) ? Colors.green : Colors.grey)
+                ? (isDriver && selectedSeats.contains(seatNumber)
+                    ? Colors.green
+                    : Colors.grey)
                 : (isSelected ? Colors.red : Colors.green),
             size: 20,
           ),
@@ -210,9 +219,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
               ),
             ),
             Text(
-              isDriver
-                  ? "Tap seats to mark/unmark booked"
-                  : "Tap to select your seats",
+              isDriver ? "Tap seats to mark/unmark booked" : "Tap to select your seats",
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 10),
