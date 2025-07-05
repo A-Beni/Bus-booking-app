@@ -22,8 +22,28 @@ class _DriverHomePageState extends State<DriverHomePage> {
   TextEditingController toController = TextEditingController();
   int _selectedIndex = 1;
 
-  final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
+  final String googleApiKey = "YOUR_API_KEY_HERE";
   bool _darkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDriverInfo();
+  }
+
+  Future<void> _loadDriverInfo() async {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+    DocumentSnapshot doc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
+
+    if (doc.exists) {
+      final data = doc.data() as Map<String, dynamic>;
+      if (data['isLive'] == true) {
+        fromController.text = data['from'] ?? '';
+        toController.text = data['to'] ?? '';
+      }
+    }
+    setState(() {});
+  }
 
   void _onThemeChanged(bool value) {
     setState(() {
@@ -77,17 +97,80 @@ class _DriverHomePageState extends State<DriverHomePage> {
         );
         break;
       case 2:
-        await FirebaseAuth.instance.signOut();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => LoginPage(
-              isDarkMode: _darkMode,
-              onThemeChanged: _onThemeChanged,
-            ),
-          ),
-        );
+        _handleLogout();
         break;
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+    DocumentSnapshot doc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
+    bool isLive = doc.exists && doc['isLive'] == true;
+
+    if (isLive) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('You Are Still Live'),
+          content: const Text(
+              'You are still sharing your location. Do you want to continue sharing it after logout or stop sharing now?'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context); 
+                await FirebaseAuth.instance.signOut();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LoginPage(
+                      isDarkMode: _darkMode,
+                      onThemeChanged: _onThemeChanged,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Continue Sharing'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await FirebaseFirestore.instance
+                    .collection('drivers')
+                    .doc(uid)
+                    .update({'isLive': false});
+                Navigator.pop(context); 
+                await FirebaseAuth.instance.signOut();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LoginPage(
+                      isDarkMode: _darkMode,
+                      onThemeChanged: _onThemeChanged,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Stop Sharing & Logout'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); 
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      await FirebaseAuth.instance.signOut();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LoginPage(
+            isDarkMode: _darkMode,
+            onThemeChanged: _onThemeChanged,
+          ),
+        ),
+      );
     }
   }
 

@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -41,7 +40,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
   double remainingDistance = 0;
   String eta = '...';
 
-  final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
+  final String googleApiKey = "YOUR_GOOGLE_API_KEY";
 
   @override
   void initState() {
@@ -50,6 +49,21 @@ class _DriverMapPageState extends State<DriverMapPage> {
     _enableLocation();
     _drawRouteAndDistance();
     _getAllPassengerMarkers();
+  }
+
+  @override
+  void dispose() {
+    _setDriverOffline();
+    super.dispose();
+  }
+
+  Future<void> _setDriverOffline() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await FirebaseFirestore.instance.collection('drivers').doc(uid).update({
+        'isLive': false,
+      });
+    }
   }
 
   Future<void> _loadIcons() async {
@@ -283,7 +297,19 @@ class _DriverMapPageState extends State<DriverMapPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Driver - You are Live')),
+      appBar: AppBar(
+        title: const Text('Driver - You are Live'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await _setDriverOffline();
+              await FirebaseAuth.instance.signOut();
+              if (mounted) Navigator.pop(context);
+            },
+          )
+        ],
+      ),
       body: _isLocationEnabled
           ? Stack(
               children: [
