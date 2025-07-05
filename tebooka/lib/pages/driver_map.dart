@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:location/location.dart' as loc;
 import 'package:http/http.dart' as http;
-import 'package:google_place/google_place.dart';
 
 class DriverMapPage extends StatefulWidget {
   final String from;
@@ -46,15 +45,27 @@ class _DriverMapPageState extends State<DriverMapPage> {
   void initState() {
     super.initState();
     _loadIcons();
-    _enableLocation();
-    _drawRouteAndDistance();
-    _getAllPassengerMarkers();
+    _checkLiveStatus();
   }
 
   @override
   void dispose() {
     _setDriverOffline();
     super.dispose();
+  }
+
+  Future<void> _checkLiveStatus() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final doc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
+    final isLive = doc.data()?['isLive'] ?? false;
+
+    if (isLive) {
+      _enableLocation();
+      _drawRouteAndDistance();
+      _getAllPassengerMarkers();
+    }
   }
 
   Future<void> _setDriverOffline() async {
