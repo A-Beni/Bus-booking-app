@@ -46,6 +46,7 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
   Future<void> _loadDetails() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final emailUser = FirebaseAuth.instance.currentUser?.email;
+
     setState(() {
       email = emailUser ?? '';
     });
@@ -56,7 +57,9 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
         final data = userDoc.data()!;
         final firstName = data['firstName'] ?? '';
         final lastName = data['lastName'] ?? '';
-        fullName = "$firstName $lastName";
+        setState(() {
+          fullName = "$firstName $lastName";
+        });
       }
 
       final driverDoc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
@@ -65,7 +68,7 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
         setState(() {
           plate = data['busPlate'] ?? '';
           imageUrl = data['imageUrl'];
-          busPlateController.text = plate;
+          busPlateController.text = plate; // sync controller
         });
       }
     }
@@ -81,14 +84,16 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
         'busPlate': plateText,
       }, SetOptions(merge: true));
       setState(() {
-        plate = plateText;
-        isEditingPlate = false;
+        plate = plateText;       // update plate for display
+        isEditingPlate = false;  // exit edit mode
+        isLoading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Bus plate saved successfully.')),
       );
+    } else {
+      setState(() => isLoading = false);
     }
-    setState(() => isLoading = false);
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -228,7 +233,10 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
                       IconButton(
                         icon: const Icon(Icons.edit, size: 18),
                         onPressed: () {
-                          setState(() => isEditingPlate = true);
+                          setState(() {
+                            isEditingPlate = true;
+                            busPlateController.text = plate; // keep text in sync
+                          });
                         },
                       ),
                     ],

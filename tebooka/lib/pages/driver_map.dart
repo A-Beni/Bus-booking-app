@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -25,7 +24,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
   LatLng _currentPosition = const LatLng(-1.9706, 30.1044);
   bool _isLocationEnabled = false;
   Set<Polyline> _polylines = {};
-  Set<Marker> _markers = {};
+  final Set<Marker> _markers = {};
   BitmapDescriptor? _busIcon;
   BitmapDescriptor? _passengerIcon;
   BitmapDescriptor? _startIcon;
@@ -38,13 +37,15 @@ class _DriverMapPageState extends State<DriverMapPage> {
   double totalRouteDistance = 0;
   double remainingDistance = 0;
   String eta = '...';
+  String driverPlate = 'Driver';
 
-  final String googleApiKey = "YOUR_GOOGLE_API_KEY";
+  final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
 
   @override
   void initState() {
     super.initState();
     _loadIcons();
+    _fetchDriverPlate();
     _checkLiveStatus();
   }
 
@@ -52,6 +53,15 @@ class _DriverMapPageState extends State<DriverMapPage> {
   void dispose() {
     _setDriverOffline();
     super.dispose();
+  }
+
+  Future<void> _fetchDriverPlate() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
+    setState(() {
+      driverPlate = doc.data()?['busPlate'] ?? 'Driver';
+    });
   }
 
   Future<void> _checkLiveStatus() async {
@@ -121,31 +131,31 @@ class _DriverMapPageState extends State<DriverMapPage> {
       if (uid == null) return;
 
       _currentPosition = LatLng(locData.latitude!, locData.longitude!);
+
       await FirebaseFirestore.instance.collection('drivers').doc(uid).update({
         'latitude': locData.latitude,
         'longitude': locData.longitude,
         'from': widget.from,
         'to': widget.to,
         'isLive': true,
-        'name': 'Driver',
+        'busPlate': driverPlate,
       });
 
       _controller?.animateCamera(CameraUpdate.newLatLng(_currentPosition));
       _getAllPassengerMarkers();
       _checkNearbyPassengers();
       _updateRemainingDistance();
+      setState(() {});
     });
   }
 
   Future<void> _drawRouteAndDistance() async {
     final origin = await _getLatLngFromPlace(widget.from);
     final destination = await _getLatLngFromPlace(widget.to);
-
     if (origin == null || destination == null) return;
 
     final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$googleApiKey&traffic_model=best_guess&departure_time=now');
-
     final response = await http.get(url);
     if (response.statusCode != 200) return;
 
@@ -159,6 +169,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
     eta = leg['duration_in_traffic']?['text'] ?? leg['duration']['text'];
 
     final points = _decodePolyline(polylinePoints);
+
     setState(() {
       _polylines = {
         Polyline(
@@ -207,8 +218,6 @@ class _DriverMapPageState extends State<DriverMapPage> {
           dest.latitude,
           dest.longitude,
         ) / 1000;
-
-    setState(() {});
   }
 
   Future<void> _getAllPassengerMarkers() async {
@@ -331,7 +340,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
                       markerId: const MarkerId('driver'),
                       position: _currentPosition,
                       icon: _busIcon ?? BitmapDescriptor.defaultMarker,
-                      infoWindow: const InfoWindow(title: 'Bus Location'),
+                      infoWindow: InfoWindow(title: driverPlate),
                     ),
                     ..._markers,
                     ...passengerMarkers,

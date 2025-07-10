@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../utils/colors.dart';
 import '../services/auth_service.dart';
 import 'login.dart';
 import 'email_verification_handler.dart';
@@ -25,8 +24,9 @@ class _SignInPageState extends State<SignInPage> {
   final lastNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  String role = 'passenger'; // Default role
+  String role = 'passenger';
   bool isLoading = false;
+  bool showPassword = false;
 
   void signUp() async {
     setState(() => isLoading = true);
@@ -50,8 +50,7 @@ class _SignInPageState extends State<SignInPage> {
     setState(() => isLoading = false);
 
     if (result != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(result)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
     } else {
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
@@ -66,8 +65,8 @@ class _SignInPageState extends State<SignInPage> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              "Registration successful. Check your email for verification.")));
+        content: Text("Registration successful. Check your email for verification."),
+      ));
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -80,107 +79,153 @@ class _SignInPageState extends State<SignInPage> {
     }
   }
 
+  Widget buildTextField({
+    required String hint,
+    required IconData icon,
+    required TextEditingController controller,
+    bool obscure = false,
+    bool showToggle = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      margin: const EdgeInsets.only(bottom: 8),
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        child: TextField(
+          controller: controller,
+          obscureText: obscure && !showPassword,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            isCollapsed: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 6),
+            border: InputBorder.none,
+            icon: Icon(icon, color: Colors.grey, size: 18),
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 13),
+            suffixIcon: showToggle
+                ? IconButton(
+                    icon: Icon(
+                      showPassword ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.grey,
+                      size: 18,
+                    ),
+                    onPressed: () => setState(() => showPassword = !showPassword),
+                  )
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBlue,
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Center(
-          child: SingleChildScrollView(
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          // Curved image spanning behind status bar at the top
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(30),
+              bottomRight: Radius.circular(30),
+            ),
+            child: SizedBox(
+              height: 280,
+              width: double.infinity,
+              child: Image.asset(
+                'assets/amahoro.jpg',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+
+          // Scrollable content with extra top padding to lower the title below image
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(25, 320, 25, 25), // increased top padding to push down content
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Create an Account',
-                    style: TextStyle(color: kWhite, fontSize: 30)),
-                const SizedBox(height: 20),
-
-                // First Name
-                TextField(
-                  controller: firstNameController,
-                  style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(
-                    labelText: 'First Name',
-                    labelStyle: TextStyle(color: kWhite),
+                const Text(
+                  "CREATE AN ACCOUNT",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.black87,
                   ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  "Enjoy bus rides in Kigali with TEBOOKA",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
                 ),
                 const SizedBox(height: 10),
 
-                // Last Name
-                TextField(
-                  controller: lastNameController,
-                  style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(
-                    labelText: 'Last Name',
-                    labelStyle: TextStyle(color: kWhite),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Email
-                TextField(
-                  controller: emailController,
-                  style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    labelStyle: TextStyle(color: kWhite),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Password
-                TextField(
+                buildTextField(hint: 'First Name', icon: Icons.person, controller: firstNameController),
+                buildTextField(hint: 'Last Name', icon: Icons.person_outline, controller: lastNameController),
+                buildTextField(hint: 'Email', icon: Icons.email, controller: emailController),
+                buildTextField(
+                  hint: 'Password',
+                  icon: Icons.lock,
                   controller: passwordController,
-                  obscureText: true,
-                  style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    labelStyle: TextStyle(color: kWhite),
-                  ),
+                  obscure: true,
+                  showToggle: true,
                 ),
-                const SizedBox(height: 20),
 
-                // Role selection
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text("Register as: ",
-                        style: TextStyle(color: kWhite)),
-                    DropdownButton<String>(
-                      dropdownColor: kBlue,
+                const SizedBox(height: 6),
+
+                // Reduced-size Role Picker
+                Container(
+                  height: 40,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
                       value: role,
+                      isExpanded: true,
+                      icon: const Icon(Icons.arrow_drop_down, size: 18),
+                      style: const TextStyle(fontSize: 13, color: Colors.black),
                       items: const [
                         DropdownMenuItem(
                           value: 'passenger',
-                          child: Text('Passenger',
-                              style: TextStyle(color: Colors.white)),
+                          child: Text("Passenger", style: TextStyle(fontSize: 13)),
                         ),
                         DropdownMenuItem(
                           value: 'driver',
-                          child: Text('Driver',
-                              style: TextStyle(color: Colors.white)),
+                          child: Text("Driver", style: TextStyle(fontSize: 13)),
                         ),
                       ],
-                      onChanged: (value) {
-                        setState(() {
-                          role = value!;
-                        });
-                      },
+                      onChanged: (value) => setState(() => role = value!),
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 20),
 
-                // Button
                 isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const Center(child: CircularProgressIndicator())
                     : ElevatedButton(
                         onPressed: signUp,
-                        child: const Text('Continue'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 40),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text("Sign In", style: TextStyle(fontSize: 14)),
                       ),
-                const SizedBox(height: 10),
 
-                // Login Redirect
-                TextButton(
+                const SizedBox(height: 6),
+
+                OutlinedButton(
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
@@ -192,13 +237,17 @@ class _SignInPageState extends State<SignInPage> {
                       ),
                     );
                   },
-                  child: const Text('Already have an account? Log in',
-                      style: TextStyle(color: kWhite)),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 40),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: const BorderSide(color: Colors.black),
+                  ),
+                  child: const Text("Login", style: TextStyle(color: Colors.black, fontSize: 14)),
                 ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

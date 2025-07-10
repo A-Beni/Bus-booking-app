@@ -111,77 +111,125 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBlue,
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                const Text('Login', style: TextStyle(color: kWhite, fontSize: 30)),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: emailController,
-                  style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: kWhite)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  style: const TextStyle(color: kWhite),
-                  decoration: const InputDecoration(labelText: 'Password', labelStyle: TextStyle(color: kWhite)),
-                ),
-                const SizedBox(height: 10),
-                Row(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/man.jpg', 
+              fit: BoxFit.cover,
+            ),
+          ),
+          Container(
+            color: Colors.black.withOpacity(0.5),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Center(
+              child: SingleChildScrollView(
+                child: Column(
                   children: [
-                    Checkbox(
-                      value: rememberMe,
-                      onChanged: (val) {
-                        setState(() => rememberMe = val!);
-                      },
-                      activeColor: Colors.white,
-                      checkColor: Colors.black,
+                    const Text(
+                      'Login',
+                      style: TextStyle(color: kWhite, fontSize: 30, fontWeight: FontWeight.bold),
                     ),
-                    const Text("Remember me", style: TextStyle(color: kWhite)),
-                    const Spacer(),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: emailController,
+                      style: const TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        hintText: 'Email',
+                        labelStyle: const TextStyle(color: Colors.grey),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: passwordController,
+                      obscureText: true,
+                      style: const TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        hintText: 'Password',
+                        labelStyle: const TextStyle(color: Colors.grey),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: rememberMe,
+                          onChanged: (val) {
+                            setState(() => rememberMe = val!);
+                          },
+                          activeColor: Colors.white,
+                          checkColor: Colors.black,
+                        ),
+                        const Text("Remember me", style: TextStyle(color: kWhite)),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: forgotPassword,
+                          child: const Text("Forgot Password?", style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: isLoading
+                          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                          : ElevatedButton(
+                              onPressed: login,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.black,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                'Login',
+                                style: TextStyle(color: Colors.white, fontSize: 16),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 10),
                     TextButton(
-                      onPressed: forgotPassword,
-                      child: const Text("Forgot Password?", style: TextStyle(color: Colors.white)),
+                      onPressed: resendVerification,
+                      child: const Text("Resend verification email", style: TextStyle(color: Colors.white)),
+                    ),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SignInPage(
+                              isDarkMode: widget.isDarkMode,
+                              onThemeChanged: widget.onThemeChanged,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('Don\'t have an account? Sign up', style: TextStyle(color: kWhite)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : ElevatedButton(
-                        onPressed: login,
-                        child: const Text('Login'),
-                      ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: resendVerification,
-                  child: const Text("Resend verification email", style: TextStyle(color: Colors.white)),
-                ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SignInPage(
-                          isDarkMode: widget.isDarkMode,
-                          onThemeChanged: widget.onThemeChanged,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text('Don\'t have an account? Sign up', style: TextStyle(color: kWhite)),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
