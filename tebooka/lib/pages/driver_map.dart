@@ -23,15 +23,18 @@ class _DriverMapPageState extends State<DriverMapPage> {
   GoogleMapController? _controller;
   LatLng _currentPosition = const LatLng(-1.9706, 30.1044);
   bool _isLocationEnabled = false;
+  bool _iconsReady = false;
+
   Set<Polyline> _polylines = {};
   final Set<Marker> _markers = {};
+  Set<Marker> passengerMarkers = {};
+
   BitmapDescriptor? _busIcon;
   BitmapDescriptor? _passengerIcon;
   BitmapDescriptor? _startIcon;
   BitmapDescriptor? _endIcon;
 
   int nearbyPassengerCount = 0;
-  Set<Marker> passengerMarkers = {};
   int totalPassengersOnRoute = 0;
 
   double totalRouteDistance = 0;
@@ -44,9 +47,14 @@ class _DriverMapPageState extends State<DriverMapPage> {
   @override
   void initState() {
     super.initState();
-    _loadIcons();
-    _fetchDriverPlate();
-    _checkLiveStatus();
+    _initializeDriverMap();
+  }
+
+  Future<void> _initializeDriverMap() async {
+    await _loadIcons();
+    setState(() => _iconsReady = true);
+    await _fetchDriverPlate();
+    await _checkLiveStatus();
   }
 
   @override
@@ -68,14 +76,16 @@ class _DriverMapPageState extends State<DriverMapPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final doc = await FirebaseFirestore.instance.collection('drivers').doc(uid).get();
-    final isLive = doc.data()?['isLive'] ?? false;
+    await FirebaseFirestore.instance.collection('drivers').doc(uid).update({
+      'isLive': true,
+      'from': widget.from,
+      'to': widget.to,
+      'busPlate': driverPlate,
+    });
 
-    if (isLive) {
-      _enableLocation();
-      _drawRouteAndDistance();
-      _getAllPassengerMarkers();
-    }
+    await _enableLocation();
+    await _drawRouteAndDistance();
+    await _getAllPassengerMarkers();
   }
 
   Future<void> _setDriverOffline() async {
@@ -142,9 +152,10 @@ class _DriverMapPageState extends State<DriverMapPage> {
       });
 
       _controller?.animateCamera(CameraUpdate.newLatLng(_currentPosition));
-      _getAllPassengerMarkers();
-      _checkNearbyPassengers();
-      _updateRemainingDistance();
+      await _getAllPassengerMarkers();
+      await _checkNearbyPassengers();
+      await _updateRemainingDistance();
+
       setState(() {});
     });
   }
@@ -169,6 +180,13 @@ class _DriverMapPageState extends State<DriverMapPage> {
     eta = leg['duration_in_traffic']?['text'] ?? leg['duration']['text'];
 
     final points = _decodePolyline(polylinePoints);
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await FirebaseFirestore.instance.collection('drivers').doc(uid).update({
+        'polyline': polylinePoints,
+      });
+    }
 
     setState(() {
       _polylines = {
@@ -221,6 +239,8 @@ class _DriverMapPageState extends State<DriverMapPage> {
   }
 
   Future<void> _getAllPassengerMarkers() async {
+    if (_passengerIcon == null) return;
+
     final snapshot = await FirebaseFirestore.instance
         .collection('passenger_locations')
         .where('to', isEqualTo: widget.to)
@@ -235,7 +255,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
           Marker(
             markerId: MarkerId('passenger_${doc.id}'),
             position: pos,
-            icon: _passengerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            icon: _passengerIcon!,
             infoWindow: const InfoWindow(title: 'Pickup'),
           ),
         );
@@ -248,7 +268,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
     });
   }
 
-  void _checkNearbyPassengers() async {
+  Future<void> _checkNearbyPassengers() async {
     final snapshot = await FirebaseFirestore.instance
         .collection('passenger_locations')
         .where('to', isEqualTo: widget.to)
@@ -330,7 +350,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
           )
         ],
       ),
-      body: _isLocationEnabled
+      body: (_isLocationEnabled && _iconsReady)
           ? Stack(
               children: [
                 GoogleMap(

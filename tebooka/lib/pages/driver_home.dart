@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart'; // << NEW
 import 'package:google_place/google_place.dart';
 import 'package:uuid/uuid.dart';
 
@@ -17,18 +18,51 @@ class DriverHomePage extends StatefulWidget {
   State<DriverHomePage> createState() => _DriverHomePageState();
 }
 
-class _DriverHomePageState extends State<DriverHomePage> {
+class _DriverHomePageState extends State<DriverHomePage> with SingleTickerProviderStateMixin {
   TextEditingController fromController = TextEditingController();
   TextEditingController toController = TextEditingController();
   int _selectedIndex = 1;
 
-  final String googleApiKey = "YOUR_API_KEY_HERE";
+  final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
   bool _darkMode = false;
+
+  bool _isLive = false;
+
+  String _currentAddress = "Fetching location...";
+  Position? _currentPosition;
+
+  late final AnimationController _animationController;
+  late final ScrollController _scrollController;
+  double _textWidth = 0;
+  double _containerWidth = 0;
 
   @override
   void initState() {
     super.initState();
     _loadDriverInfo();
+    _listenToLiveStatus();
+
+    // Initialize animation controller for marquee effect
+    _animationController = AnimationController(vsync: this, duration: const Duration(seconds: 10));
+    _scrollController = ScrollController();
+
+    _animationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        // Reverse scroll
+        _scrollController.jumpTo(0);
+        _animationController.forward(from: 0);
+      }
+    });
+
+    // Start location updates if live
+    _startLocationUpdates();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDriverInfo() async {
@@ -40,9 +74,36 @@ class _DriverHomePageState extends State<DriverHomePage> {
       if (data['isLive'] == true) {
         fromController.text = data['from'] ?? '';
         toController.text = data['to'] ?? '';
+        _isLive = true;
+        _startLocationUpdates(); // start streaming if live
+      } else {
+        _isLive = false;
       }
     }
     setState(() {});
+  }
+
+  void _listenToLiveStatus() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    FirebaseFirestore.instance
+        .collection('drivers')
+        .doc(uid)
+        .snapshots()
+        .listen((doc) {
+      if (doc.exists) {
+        final data = doc.data()!;
+        setState(() {
+          _isLive = data['isLive'] == true;
+          fromController.text = data['from'] ?? fromController.text;
+          toController.text = data['to'] ?? toController.text;
+          if (_isLive) {
+            _startLocationUpdates();
+          }
+        });
+      }
+    });
   }
 
   void _onThemeChanged(bool value) {
@@ -65,6 +126,65 @@ class _DriverHomePageState extends State<DriverHomePage> {
       'to': toController.text,
       'isLive': true,
       'name': 'Driver',
+    }, SetOptions(merge: true));
+
+    _currentPosition = pos;
+    _getAddressFromLatLng(pos);
+  }
+
+  // START LISTENING TO LOCATION CHANGES
+  void _startLocationUpdates() {
+    Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+    ).listen((Position position) {
+      _currentPosition = position;
+      _updateLocationInFirestore(position);
+      _getAddressFromLatLng(position);
+    });
+  }
+
+  Future<void> _updateLocationInFirestore(Position position) async {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance.collection('drivers').doc(uid).set({
+      'latitude': position.latitude,
+      'longitude': position.longitude,
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _getAddressFromLatLng(Position position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks.first;
+        String newAddress = "${place.name}, ${place.locality}, ${place.country}";
+
+        if (mounted && newAddress != _currentAddress) {
+          setState(() {
+            _currentAddress = newAddress;
+          });
+
+          // Restart marquee animation on address change
+          _startMarquee();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _currentAddress = "Could not get address";
+        });
+      }
+    }
+  }
+
+  // MARQUEE LOGIC: Animate horizontal scroll from right to left and loop
+  void _startMarquee() {
+    // Only start if container and text widths are measured
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients && _containerWidth > 0 && _textWidth > 0) {
+        _scrollController.jumpTo(0);
+        _animationController.repeat();
+      }
     });
   }
 
@@ -117,7 +237,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           actions: [
             TextButton(
               onPressed: () async {
-                Navigator.pop(context); 
+                Navigator.pop(context);
                 await FirebaseAuth.instance.signOut();
                 Navigator.pushReplacement(
                   context,
@@ -137,7 +257,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                     .collection('drivers')
                     .doc(uid)
                     .update({'isLive': false});
-                Navigator.pop(context); 
+                Navigator.pop(context);
                 await FirebaseAuth.instance.signOut();
                 Navigator.pushReplacement(
                   context,
@@ -153,7 +273,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(context); 
+                Navigator.pop(context);
               },
               child: const Text('Cancel'),
             ),
@@ -279,6 +399,108 @@ class _DriverHomePageState extends State<DriverHomePage> {
     );
   }
 
+  Widget _buildLiveStatusCard() {
+    return Card(
+      color: _isLive ? Colors.green[600] : Colors.red[600],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 5,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _isLive ? Icons.check_circle : Icons.cancel,
+              color: Colors.white,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              _isLive ? "You Are LIVE" : "You Are OFFLINE",
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Marquee widget for scrolling text horizontally
+  Widget _buildMarqueeText() {
+    return LayoutBuilder(builder: (context, constraints) {
+      _containerWidth = constraints.maxWidth;
+
+      // Measure text width using a TextPainter
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: _currentAddress,
+          style: TextStyle(
+            color: _darkMode ? Colors.white70 : Colors.black87,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        maxLines: 1,
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+
+      _textWidth = textPainter.width;
+
+      // If text width <= container width, no need to scroll
+      if (_textWidth <= _containerWidth) {
+        return Text(
+          _currentAddress,
+          style: TextStyle(
+            color: _darkMode ? Colors.white70 : Colors.black87,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+
+      // Animate scrolling from right to left using ScrollController & AnimationController
+      return SizedBox(
+        height: 20,
+        child: ListView(
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 30),
+              child: Text(
+                _currentAddress,
+                style: TextStyle(
+                  color: _darkMode ? Colors.white70 : Colors.black87,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            // Duplicate text to create seamless scrolling effect
+            Padding(
+              padding: const EdgeInsets.only(right: 30),
+              child: Text(
+                _currentAddress,
+                style: TextStyle(
+                  color: _darkMode ? Colors.white70 : Colors.black87,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final backgroundColor = _darkMode ? Colors.black : Colors.white;
@@ -312,6 +534,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(child: _buildLiveStatusCard()),
+              const SizedBox(height: 30),
               Text("Select From:",
                   style: TextStyle(
                       fontWeight: FontWeight.bold, color: textColor)),
@@ -398,6 +622,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 },
                 child: const Text('Stop Sharing Location'),
               ),
+              const SizedBox(height: 10),
+
+              // HERE IS THE NEW DYNAMIC LOCATION NAME SUBTITLE
+              if (_isLive)
+                Container(
+                  height: 20,
+                  width: double.infinity,
+                  color: Colors.transparent,
+                  child: _buildMarqueeText(),
+                ),
             ],
           ),
         ),
