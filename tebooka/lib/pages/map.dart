@@ -4,7 +4,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import 'booking_page.dart';
 
 class MapPage extends StatefulWidget {
@@ -42,18 +41,14 @@ class _MapPageState extends State<MapPage> {
   @override
   void initState() {
     super.initState();
-    _initializeMapPage();
-  }
-
-  Future<void> _initializeMapPage() async {
-    await _loadIcons();
-    await _requestLocationPermission();
+    _loadIcons().then((_) {
+      _requestLocationPermission();
+    });
   }
 
   Future<void> _loadIcons() async {
-    _busIcon = await _createIcon(Icons.directions_bus, Colors.blue, size: 80, iconSize: 60);
-    _pickupIcon = await _createIcon(Icons.location_on, Colors.green, size: 100, iconSize: 90);
-    setState(() {});
+    _busIcon = await _createIcon(Icons.directions_bus, Colors.blue, size: 100, iconSize: 80);
+    _pickupIcon = await _createIcon(Icons.location_pin, Colors.green, size: 100, iconSize: 80);
   }
 
   Future<BitmapDescriptor> _createIcon(IconData icon, Color color,
@@ -75,7 +70,6 @@ class _MapPageState extends State<MapPage> {
 
     painter.layout();
     painter.paint(canvas, Offset((size - iconSize) / 2, (size - iconSize) / 2));
-
     final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final data = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
@@ -89,7 +83,7 @@ class _MapPageState extends State<MapPage> {
 
     if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
       setState(() => _locationPermissionGranted = true);
-      await _setPassengerLocation();
+      _setPassengerLocation();
       _listenToNearbyDrivers();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -101,20 +95,16 @@ class _MapPageState extends State<MapPage> {
   Future<void> _setPassengerLocation() async {
     final pos = await Geolocator.getCurrentPosition();
     final user = FirebaseAuth.instance.currentUser;
-
-    
-    final pickupLatLng = LatLng(pos.latitude + 0.0003, pos.longitude + 0.0003);
-
     if (user != null) {
-      await FirebaseFirestore.instance.collection('passenger_locations').doc(user.uid).set({
-        'latitude': pickupLatLng.latitude,
-        'longitude': pickupLatLng.longitude,
-        'to': widget.passengerDestination,
+      await FirebaseFirestore.instance.collection('passengers').doc(user.uid).set({
+        'latitude': pos.latitude,
+        'longitude': pos.longitude,
+        'destination': widget.passengerDestination,
         'timestamp': FieldValue.serverTimestamp(),
       });
 
       setState(() {
-        _selectedPickup = pickupLatLng;
+        _selectedPickup = LatLng(pos.latitude, pos.longitude);
       });
     }
   }
@@ -122,7 +112,7 @@ class _MapPageState extends State<MapPage> {
   void _updateManualPickup(LatLng position) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await FirebaseFirestore.instance.collection('passenger_locations').doc(user.uid).update({
+      await FirebaseFirestore.instance.collection('passengers').doc(user.uid).update({
         'latitude': position.latitude,
         'longitude': position.longitude,
       });
@@ -211,12 +201,13 @@ class _MapPageState extends State<MapPage> {
         }
       }
 
-      if (_selectedPickup != null) {
+      // Add pickup marker only once after loading icons
+      if (_selectedPickup != null && _pickupIcon != null) {
         tempMarkers.add(
           Marker(
             markerId: const MarkerId('passenger_pickup'),
             position: _selectedPickup!,
-            icon: _pickupIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            icon: _pickupIcon!,
             infoWindow: const InfoWindow(title: 'Your Pickup'),
           ),
         );
@@ -336,8 +327,7 @@ class _MapPageState extends State<MapPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Driver Distance: ${distanceInKm.toStringAsFixed(2)} km',
-                    style: const TextStyle(fontSize: 16)),
+                Text('Driver Distance: ${distanceInKm.toStringAsFixed(2)} km', style: const TextStyle(fontSize: 16)),
                 Text('ETA: $estimatedTimeInMin min', style: const TextStyle(fontSize: 16)),
               ],
             ),

@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -79,6 +78,8 @@ class _BookingPageState extends State<BookingPage> {
     if (picked != null) {
       setState(() {
         _tripDate = picked;
+        // Clear seats selection on date change:
+        selectedSeats.clear();
       });
     }
   }
@@ -91,6 +92,8 @@ class _BookingPageState extends State<BookingPage> {
     if (picked != null) {
       setState(() {
         _tripTime = picked;
+        // Clear seats selection on time change:
+        selectedSeats.clear();
       });
     }
   }
@@ -98,6 +101,7 @@ class _BookingPageState extends State<BookingPage> {
   Future<void> _goToSeatSelection() async {
     List<int> reserved = [];
 
+    // Query tickets already booked for this trip (from, to, date)
     final booked = await FirebaseFirestore.instance
         .collection('tickets')
         .where('from', isEqualTo: _fromController.text.trim())
@@ -106,23 +110,42 @@ class _BookingPageState extends State<BookingPage> {
         .get();
 
     for (var doc in booked.docs) {
-      reserved.add(doc['seatNumber']);
+      final seatNumber = doc['seatNumber'];
+      if (seatNumber is int) reserved.add(seatNumber);
     }
 
+    // Pass seatCount and reserved seats to SeatSelectionPage
     final result = await Navigator.push<List<int>>(
       context,
       MaterialPageRoute(
         builder: (_) => SeatSelectionPage(
           seatCount: _seats,
           reservedSeats: reserved,
+          from: _fromController.text.trim(),
+          to: _toController.text.trim(),
+          tripDate: _tripDate,
+          tripTime: _tripTime,
+          driverId: widget.driverId,
         ),
       ),
     );
 
+    // Result is list of selected seat numbers
     if (result != null && result.length == _seats) {
       setState(() {
         selectedSeats = result;
       });
+    } else if (result != null) {
+      // If seats selected do not match count, reset selection & show warning
+      setState(() {
+        selectedSeats.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Please select exactly the number of seats you want to book.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -130,53 +153,62 @@ class _BookingPageState extends State<BookingPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     double fare = (widget.distanceKm ?? 0) * 100;
 
-    if (uid != null && selectedSeats.isNotEmpty) {
-      for (var seat in selectedSeats) {
-        final ticket = <String, dynamic>{
-          'passengerId': uid,
-          'from': _fromController.text.trim(),
-          'to': _toController.text.trim(),
-          'seats': _seats,
-          'tripDate': Timestamp.fromDate(_tripDate),
-          'tripTime': _tripTime.format(context),
-          'seatNumber': seat,
-          'timestamp': Timestamp.now(),
-          'fare': fare,
-        };
+    if (uid != null && selectedSeats.length == _seats) {
+      try {
+        for (var seat in selectedSeats) {
+          final ticket = <String, dynamic>{
+            'passengerId': uid,
+            'from': _fromController.text.trim(),
+            'to': _toController.text.trim(),
+            'seats': _seats,
+            'tripDate': Timestamp.fromDate(_tripDate),
+            'tripTime': _tripTime.format(context),
+            'seatNumber': seat,
+            'timestamp': Timestamp.now(),
+            'fare': fare,
+          };
 
-        if (widget.driverId != null) ticket['driverId'] = widget.driverId!;
-        if (widget.distanceKm != null) ticket['distanceKm'] = widget.distanceKm!;
-        if (widget.etaMinutes != null) ticket['etaMinutes'] = widget.etaMinutes!;
+          if (widget.driverId != null) ticket['driverId'] = widget.driverId!;
+          if (widget.distanceKm != null) ticket['distanceKm'] = widget.distanceKm!;
+          if (widget.etaMinutes != null) ticket['etaMinutes'] = widget.etaMinutes!;
 
-        await FirebaseFirestore.instance.collection('tickets').add(ticket);
-      }
+          await FirebaseFirestore.instance.collection('tickets').add(ticket);
+        }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🎉 Booking confirmed! Driver has been notified.'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      await Future.delayed(const Duration(seconds: 2));
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TicketPage(
-            from: _fromController.text.trim(),
-            to: _toController.text.trim(),
-            tripDate: _tripDate,
-            tripTime: _tripTime,
-            selectedSeats: selectedSeats,
-            fare: fare,
-            driverId: widget.driverId ?? '',
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Booking confirmed! Driver has been notified.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
           ),
-        ),
-      );
+        );
+
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TicketPage(
+              from: _fromController.text.trim(),
+              to: _toController.text.trim(),
+              tripDate: _tripDate,
+              tripTime: _tripTime,
+              selectedSeats: selectedSeats,
+              fare: fare,
+              driverId: widget.driverId ?? '',
+            ),
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error booking tickets: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -246,6 +278,8 @@ class _BookingPageState extends State<BookingPage> {
     if (result != null) {
       setState(() {
         controller.text = result;
+        // Clear seat selection on place change:
+        selectedSeats.clear();
       });
     }
   }
@@ -265,6 +299,8 @@ class _BookingPageState extends State<BookingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isConfirmEnabled = selectedSeats.length == _seats;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Bus Ticket'), backgroundColor: Colors.red),
       body: Center(
@@ -279,7 +315,10 @@ class _BookingPageState extends State<BookingPage> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const Text("🚌 Booking Summary", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const Text(
+                      "🚌 Booking Summary",
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 12),
 
                     _infoRow(
@@ -331,10 +370,8 @@ class _BookingPageState extends State<BookingPage> {
 
                     if (widget.distanceKm != null)
                       _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
-                    if (widget.etaMinutes != null)
-                      _infoRow("ETA", Text("${widget.etaMinutes} min")),
-                    if (driverName != null)
-                      _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
+                    if (widget.etaMinutes != null) _infoRow("ETA", Text("${widget.etaMinutes} min")),
+                    if (driverName != null) _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
                     if (selectedSeats.isNotEmpty)
                       _infoRow("Your Seats", Text(selectedSeats.map((e) => 'A$e').join(', '))),
 
@@ -345,7 +382,7 @@ class _BookingPageState extends State<BookingPage> {
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
-                      onPressed: selectedSeats.length == _seats ? () => notifyDriver(context) : null,
+                      onPressed: isConfirmEnabled ? () => notifyDriver(context) : null,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
                       child: const Text('Notify Driver & Confirm'),
                     ),
