@@ -40,6 +40,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   bool isDriver = false;
   bool isLoading = true;
   int standingCount = 0;
+  int selectedStanding = 0;
 
   @override
   void initState() {
@@ -92,14 +93,18 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         }
       }
 
+      int newStanding = standingCount + selectedStanding;
+
       await docRef.set({
         'reservedSeats': updatedReservedSeats,
-        'standingCount': standingCount,
+        'standingCount': newStanding,
       }, SetOptions(merge: true));
 
       setState(() {
         reservedSeats = updatedReservedSeats;
+        standingCount = newStanding;
         selectedSeats.clear();
+        selectedStanding = 0;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,7 +127,6 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         Navigator.pop(context);
       }
     } else {
-      // ✅ Null safety check
       if (widget.tripDate == null ||
           widget.tripTime == null ||
           widget.from == null ||
@@ -170,7 +174,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   Widget buildSeat(int seatNumber) {
     final isReserved = reservedSeats.contains(seatNumber);
     final isSelected = selectedSeats.contains(seatNumber);
-    final spotsUsed = selectedSeats.length + standingCount;
+    final spotsUsed = selectedSeats.length + selectedStanding;
 
     final isDisabled = !isDriver &&
         (spotsUsed >= widget.seatCount && !isSelected) ||
@@ -181,20 +185,10 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           ? null
           : () {
               setState(() {
-                if (isDriver) {
-                  if (selectedSeats.contains(seatNumber)) {
-                    selectedSeats.remove(seatNumber);
-                  } else {
-                    selectedSeats.add(seatNumber);
-                  }
+                if (isSelected) {
+                  selectedSeats.remove(seatNumber);
                 } else {
-                  if (!isReserved) {
-                    if (isSelected) {
-                      selectedSeats.remove(seatNumber);
-                    } else if (selectedSeats.length + standingCount < widget.seatCount) {
-                      selectedSeats.add(seatNumber);
-                    }
-                  }
+                  selectedSeats.add(seatNumber);
                 }
               });
             },
@@ -216,23 +210,25 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   }
 
   Widget buildStandingSelector() {
+    final maxSpots = widget.seatCount;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
           icon: const Icon(Icons.remove_circle_outline),
-          onPressed: standingCount > 0
-              ? () => setState(() => standingCount--)
+          onPressed: selectedStanding > 0
+              ? () => setState(() => selectedStanding--)
               : null,
         ),
         Text(
-          'Standing: $standingCount',
+          'Standing: ${isDriver ? standingCount + selectedStanding : selectedStanding}',
           style: const TextStyle(fontSize: 16),
         ),
         IconButton(
           icon: const Icon(Icons.add_circle_outline),
-          onPressed: (selectedSeats.length + standingCount < widget.seatCount)
-              ? () => setState(() => standingCount++)
+          onPressed: (selectedSeats.length + selectedStanding < maxSpots)
+              ? () => setState(() => selectedStanding++)
               : null,
         ),
       ],
@@ -275,6 +271,8 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
       );
     }
 
+    final totalSelected = selectedSeats.length + selectedStanding;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isDriver ? 'Driver Seat Management' : 'Select Spots'),
@@ -293,14 +291,14 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
             ),
             Text(
               isDriver
-                  ? "Tap seats to mark/unmark booked"
+                  ? "Tap seats and adjust standing to update"
                   : "Select your seats and standing spots",
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 10),
             ...frontSeats,
             const SizedBox(height: 10),
-            if (!isDriver) buildStandingSelector(),
+            buildStandingSelector(),
             const Divider(),
             Expanded(
               child: ListView.separated(
@@ -311,12 +309,12 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              "Remaining Spots: ${widget.seatCount - (selectedSeats.length + standingCount)}",
+              "Remaining Spots: ${widget.seatCount - totalSelected}",
               style: const TextStyle(fontSize: 13, color: Colors.black54),
             ),
             const SizedBox(height: 10),
             ElevatedButton(
-              onPressed: (selectedSeats.length + standingCount == widget.seatCount || isDriver)
+              onPressed: (totalSelected == widget.seatCount || isDriver)
                   ? _confirmSeatSelection
                   : null,
               style: ElevatedButton.styleFrom(
