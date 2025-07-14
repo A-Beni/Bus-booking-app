@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'users.dart';
+import 'ticket.dart';
 
 class SeatSelectionPage extends StatefulWidget {
   final int seatCount;
@@ -38,7 +39,6 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   List<int> selectedSeats = [];
   bool isDriver = false;
   bool isLoading = true;
-
   int standingCount = 0;
 
   @override
@@ -122,11 +122,48 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         Navigator.pop(context);
       }
     } else {
-      Navigator.pop(context, {
-        'selectedSeats': selectedSeats,
-        'standingSpots': standingCount,
-        'totalSpots': widget.seatCount,
-      });
+      // ✅ Null safety check
+      if (widget.tripDate == null ||
+          widget.tripTime == null ||
+          widget.from == null ||
+          widget.to == null ||
+          widget.driverId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Missing trip details. Cannot confirm.")),
+        );
+        return;
+      }
+
+      double fare = widget.fare ?? 0;
+
+      for (int seat in selectedSeats) {
+        await FirebaseFirestore.instance.collection('tickets').add({
+          'passengerId': uid,
+          'from': widget.from!,
+          'to': widget.to!,
+          'tripDate': Timestamp.fromDate(widget.tripDate!),
+          'tripTime': widget.tripTime!.format(context),
+          'seatNumber': seat,
+          'fare': fare,
+          'timestamp': Timestamp.now(),
+          'driverId': widget.driverId!,
+        });
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TicketPage(
+            from: widget.from!,
+            to: widget.to!,
+            tripDate: widget.tripDate!,
+            tripTime: widget.tripTime!,
+            selectedSeats: selectedSeats,
+            fare: fare,
+            driverId: widget.driverId!,
+          ),
+        ),
+      );
     }
   }
 
