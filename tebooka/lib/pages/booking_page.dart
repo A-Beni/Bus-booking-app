@@ -43,6 +43,7 @@ class _BookingPageState extends State<BookingPage> {
   late TimeOfDay _tripTime;
   int _seats = 1;
   List<int> selectedSeats = [];
+  int selectedStanding = 0;
   String? driverName, driverPhone;
 
   final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
@@ -69,7 +70,7 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   Future<void> _pickDate() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: _tripDate,
       firstDate: DateTime.now(),
@@ -78,22 +79,19 @@ class _BookingPageState extends State<BookingPage> {
     if (picked != null) {
       setState(() {
         _tripDate = picked;
-        // Clear seats selection on date change:
         selectedSeats.clear();
+        selectedStanding = 0;
       });
     }
   }
 
   Future<void> _pickTime() async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _tripTime,
-    );
+    final picked = await showTimePicker(context: context, initialTime: _tripTime);
     if (picked != null) {
       setState(() {
         _tripTime = picked;
-        // Clear seats selection on time change:
         selectedSeats.clear();
+        selectedStanding = 0;
       });
     }
   }
@@ -101,7 +99,6 @@ class _BookingPageState extends State<BookingPage> {
   Future<void> _goToSeatSelection() async {
     List<int> reserved = [];
 
-    // Query tickets already booked for this trip (from, to, date)
     final booked = await FirebaseFirestore.instance
         .collection('tickets')
         .where('from', isEqualTo: _fromController.text.trim())
@@ -114,8 +111,7 @@ class _BookingPageState extends State<BookingPage> {
       if (seatNumber is int) reserved.add(seatNumber);
     }
 
-    // Pass seatCount and reserved seats to SeatSelectionPage
-    final result = await Navigator.push<List<int>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (_) => SeatSelectionPage(
@@ -130,22 +126,27 @@ class _BookingPageState extends State<BookingPage> {
       ),
     );
 
-    // Result is list of selected seat numbers
-    if (result != null && result.length == _seats) {
-      setState(() {
-        selectedSeats = result;
-      });
-    } else if (result != null) {
-      // If seats selected do not match count, reset selection & show warning
-      setState(() {
-        selectedSeats.clear();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Please select exactly the number of seats you want to book.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (result != null &&
+        result['selectedSeats'] is List<int> &&
+        result['selectedStanding'] is int) {
+      final totalSelected = (result['selectedSeats'] as List<int>).length + (result['selectedStanding'] as int);
+      if (totalSelected == _seats) {
+        setState(() {
+          selectedSeats = List<int>.from(result['selectedSeats']);
+          selectedStanding = result['selectedStanding'];
+        });
+      } else {
+        setState(() {
+          selectedSeats.clear();
+          selectedStanding = 0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Please select the exact number of seats and standing spots.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     }
   }
 
@@ -153,10 +154,10 @@ class _BookingPageState extends State<BookingPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     double fare = (widget.distanceKm ?? 0) * 100;
 
-    if (uid != null && selectedSeats.length == _seats) {
+    if (uid != null && (selectedSeats.length + selectedStanding == _seats)) {
       try {
         for (var seat in selectedSeats) {
-          final ticket = <String, dynamic>{
+          await FirebaseFirestore.instance.collection('tickets').add({
             'passengerId': uid,
             'from': _fromController.text.trim(),
             'to': _toController.text.trim(),
@@ -166,13 +167,27 @@ class _BookingPageState extends State<BookingPage> {
             'seatNumber': seat,
             'timestamp': Timestamp.now(),
             'fare': fare,
-          };
+            if (widget.driverId != null) 'driverId': widget.driverId!,
+            if (widget.distanceKm != null) 'distanceKm': widget.distanceKm!,
+            if (widget.etaMinutes != null) 'etaMinutes': widget.etaMinutes!,
+          });
+        }
 
-          if (widget.driverId != null) ticket['driverId'] = widget.driverId!;
-          if (widget.distanceKm != null) ticket['distanceKm'] = widget.distanceKm!;
-          if (widget.etaMinutes != null) ticket['etaMinutes'] = widget.etaMinutes!;
-
-          await FirebaseFirestore.instance.collection('tickets').add(ticket);
+        for (int i = 0; i < selectedStanding; i++) {
+          await FirebaseFirestore.instance.collection('tickets').add({
+            'passengerId': uid,
+            'from': _fromController.text.trim(),
+            'to': _toController.text.trim(),
+            'seats': _seats,
+            'tripDate': Timestamp.fromDate(_tripDate),
+            'tripTime': _tripTime.format(context),
+            'seatNumber': 'Standing',
+            'timestamp': Timestamp.now(),
+            'fare': fare,
+            if (widget.driverId != null) 'driverId': widget.driverId!,
+            if (widget.distanceKm != null) 'distanceKm': widget.distanceKm!,
+            if (widget.etaMinutes != null) 'etaMinutes': widget.etaMinutes!,
+          });
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -180,7 +195,6 @@ class _BookingPageState extends State<BookingPage> {
             content: Text('🎉 Booking confirmed! Driver has been notified.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
           ),
         );
 
@@ -203,10 +217,7 @@ class _BookingPageState extends State<BookingPage> {
         );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error booking tickets: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('❌ Error booking tickets: $e'), backgroundColor: Colors.red),
         );
       }
     } else {
@@ -223,63 +234,56 @@ class _BookingPageState extends State<BookingPage> {
     final googlePlace = GooglePlace(googleApiKey);
     final sessionToken = const Uuid().v4();
 
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        TextEditingController search = TextEditingController();
-        List<AutocompletePrediction> predictions = [];
+    final result = await showDialog<String>(context: context, builder: (context) {
+      TextEditingController search = TextEditingController();
+      List<AutocompletePrediction> predictions = [];
 
-        return StatefulBuilder(builder: (context, setState) {
-          Future<void> onChanged(String val) async {
-            if (val.isNotEmpty) {
-              final res = await googlePlace.autocomplete.get(val, sessionToken: sessionToken);
-              if (res != null && res.predictions != null) {
-                setState(() {
-                  predictions = res.predictions!;
-                });
-              }
+      return StatefulBuilder(builder: (context, setState) {
+        Future<void> onChanged(String val) async {
+          if (val.isNotEmpty) {
+            final res = await googlePlace.autocomplete.get(val, sessionToken: sessionToken);
+            if (res != null && res.predictions != null) {
+              setState(() => predictions = res.predictions!);
             }
           }
+        }
 
-          return AlertDialog(
-            title: const Text("Search location"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  autofocus: true,
-                  controller: search,
-                  onChanged: onChanged,
-                  decoration: const InputDecoration(hintText: "Enter place"),
+        return AlertDialog(
+          title: const Text("Search location"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                autofocus: true,
+                controller: search,
+                onChanged: onChanged,
+                decoration: const InputDecoration(hintText: "Enter place"),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  itemCount: predictions.length,
+                  itemBuilder: (context, index) {
+                    final p = predictions[index];
+                    return ListTile(
+                      title: Text(p.description ?? ''),
+                      onTap: () => Navigator.pop(context, p.description),
+                    );
+                  },
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 200,
-                  child: ListView.builder(
-                    itemCount: predictions.length,
-                    itemBuilder: (context, index) {
-                      final p = predictions[index];
-                      return ListTile(
-                        title: Text(p.description ?? ''),
-                        onTap: () {
-                          Navigator.pop(context, p.description);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        });
-      },
-    );
+              ),
+            ],
+          ),
+        );
+      });
+    });
 
     if (result != null) {
       setState(() {
         controller.text = result;
-        // Clear seat selection on place change:
         selectedSeats.clear();
+        selectedStanding = 0;
       });
     }
   }
@@ -299,7 +303,7 @@ class _BookingPageState extends State<BookingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isConfirmEnabled = selectedSeats.length == _seats;
+    final isConfirmEnabled = selectedSeats.length + selectedStanding == _seats;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Bus Ticket'), backgroundColor: Colors.red),
@@ -315,66 +319,33 @@ class _BookingPageState extends State<BookingPage> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const Text(
-                      "🚌 Booking Summary",
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
+                    const Text("🚌 Booking Summary", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
-
-                    _infoRow(
-                      "From",
-                      TextButton(
-                        onPressed: () => _selectPlace(_fromController),
-                        child: Text(_fromController.text.isEmpty ? "Select From" : _fromController.text),
-                      ),
-                    ),
-                    _infoRow(
-                      "To",
-                      TextButton(
-                        onPressed: () => _selectPlace(_toController),
-                        child: Text(_toController.text.isEmpty ? "Select To" : _toController.text),
-                      ),
-                    ),
-
-                    _infoRow(
-                      "Date",
-                      TextButton(
-                        onPressed: _pickDate,
-                        child: Text("${_tripDate.day}/${_tripDate.month}/${_tripDate.year}"),
-                      ),
-                    ),
-                    _infoRow(
-                      "Time",
-                      TextButton(
-                        onPressed: _pickTime,
-                        child: Text("${_tripTime.hour}:${_tripTime.minute.toString().padLeft(2, '0')}"),
-                      ),
-                    ),
-                    _infoRow(
-                      "Seats",
-                      DropdownButton<int>(
-                        value: _seats,
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _seats = value;
-                              selectedSeats.clear();
-                            });
-                          }
-                        },
-                        items: List.generate(10, (i) => i + 1)
-                            .map((e) => DropdownMenuItem(value: e, child: Text("$e")))
-                            .toList(),
-                      ),
-                    ),
-
-                    if (widget.distanceKm != null)
-                      _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
+                    _infoRow("From", TextButton(onPressed: () => _selectPlace(_fromController), child: Text(_fromController.text))),
+                    _infoRow("To", TextButton(onPressed: () => _selectPlace(_toController), child: Text(_toController.text))),
+                    _infoRow("Date", TextButton(onPressed: _pickDate, child: Text("${_tripDate.day}/${_tripDate.month}/${_tripDate.year}"))),
+                    _infoRow("Time", TextButton(onPressed: _pickTime, child: Text("${_tripTime.hour}:${_tripTime.minute.toString().padLeft(2, '0')}"))),
+                    _infoRow("Seats", DropdownButton<int>(
+                      value: _seats,
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _seats = val;
+                            selectedSeats.clear();
+                            selectedStanding = 0;
+                          });
+                        }
+                      },
+                      items: List.generate(10, (i) => i + 1).map((e) => DropdownMenuItem(value: e, child: Text("$e"))).toList(),
+                    )),
+                    if (widget.distanceKm != null) _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
                     if (widget.etaMinutes != null) _infoRow("ETA", Text("${widget.etaMinutes} min")),
                     if (driverName != null) _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
-                    if (selectedSeats.isNotEmpty)
-                      _infoRow("Your Seats", Text(selectedSeats.map((e) => 'A$e').join(', '))),
-
+                    if (selectedSeats.isNotEmpty || selectedStanding > 0)
+                      _infoRow("Your Selection", Text([
+                        ...selectedSeats.map((e) => "A$e"),
+                        ...List.generate(selectedStanding, (i) => "ST")
+                      ].join(', '))),
                     const SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: _goToSeatSelection,

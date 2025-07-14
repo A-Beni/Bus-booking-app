@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'users.dart';
-import 'ticket.dart';
 
 class SeatSelectionPage extends StatefulWidget {
   final int seatCount;
@@ -82,91 +81,73 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    if (isDriver) {
-      final docRef = FirebaseFirestore.instance.collection('drivers').doc(uid);
-      List<int> updatedReservedSeats = List<int>.from(reservedSeats);
-      for (int seat in selectedSeats) {
-        if (updatedReservedSeats.contains(seat)) {
-          updatedReservedSeats.remove(seat);
-        } else {
-          updatedReservedSeats.add(seat);
+    try {
+      if (isDriver) {
+        final docRef = FirebaseFirestore.instance.collection('drivers').doc(uid);
+        List<int> updatedReservedSeats = List<int>.from(reservedSeats);
+        for (int seat in selectedSeats) {
+          if (updatedReservedSeats.contains(seat)) {
+            updatedReservedSeats.remove(seat);
+          } else {
+            updatedReservedSeats.add(seat);
+          }
         }
-      }
 
-      int newStanding = standingCount + selectedStanding;
+        int newStanding = standingCount + selectedStanding;
 
-      await docRef.set({
-        'reservedSeats': updatedReservedSeats,
-        'standingCount': newStanding,
-      }, SetOptions(merge: true));
+        await docRef.set({
+          'reservedSeats': updatedReservedSeats,
+          'standingCount': newStanding,
+        }, SetOptions(merge: true));
 
-      setState(() {
-        reservedSeats = updatedReservedSeats;
-        standingCount = newStanding;
-        selectedSeats.clear();
-        selectedStanding = 0;
-      });
+        setState(() {
+          reservedSeats = updatedReservedSeats;
+          standingCount = newStanding;
+          selectedSeats.clear();
+          selectedStanding = 0;
+        });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Seats and standing count updated successfully.")),
-      );
-
-      if (widget.from != null && widget.to != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => UsersPage(
-              from: widget.from!,
-              to: widget.to!,
-              isDarkMode: widget.isDarkMode,
-              onThemeChanged: widget.onThemeChanged ?? (_) {},
-            ),
-          ),
-        );
-      } else {
-        Navigator.pop(context);
-      }
-    } else {
-      if (widget.tripDate == null ||
-          widget.tripTime == null ||
-          widget.from == null ||
-          widget.to == null ||
-          widget.driverId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Missing trip details. Cannot confirm.")),
+          const SnackBar(content: Text("Seats and standing count updated successfully.")),
         );
-        return;
-      }
 
-      double fare = widget.fare ?? 0;
+        if (widget.from != null && widget.to != null) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => UsersPage(
+                from: widget.from!,
+                to: widget.to!,
+                isDarkMode: widget.isDarkMode,
+                onThemeChanged: widget.onThemeChanged ?? (_) {},
+              ),
+            ),
+          );
+        } else {
+          Navigator.pop(context);
+        }
+      } else {
+        if (widget.tripDate == null ||
+            widget.tripTime == null ||
+            widget.from == null ||
+            widget.to == null ||
+            widget.driverId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Missing trip details. Cannot confirm.")),
+          );
+          return;
+        }
 
-      for (int seat in selectedSeats) {
-        await FirebaseFirestore.instance.collection('tickets').add({
-          'passengerId': uid,
-          'from': widget.from!,
-          'to': widget.to!,
-          'tripDate': Timestamp.fromDate(widget.tripDate!),
-          'tripTime': widget.tripTime!.format(context),
-          'seatNumber': seat,
-          'fare': fare,
-          'timestamp': Timestamp.now(),
-          'driverId': widget.driverId!,
+        // ✅ FIX: Return both seating and standing selections
+        Navigator.pop(context, {
+          'selectedSeats': selectedSeats,
+          'selectedStanding': selectedStanding,
         });
       }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TicketPage(
-            from: widget.from!,
-            to: widget.to!,
-            tripDate: widget.tripDate!,
-            tripTime: widget.tripTime!,
-            selectedSeats: selectedSeats,
-            fare: fare,
-            driverId: widget.driverId!,
-          ),
-        ),
+    } catch (e) {
+      debugPrint("Seat confirmation failed: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Something went wrong while confirming.")),
       );
     }
   }
@@ -211,18 +192,19 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
   Widget buildStandingSelector() {
     final maxSpots = widget.seatCount;
+    final totalStanding = isDriver ? standingCount + selectedStanding : selectedStanding;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
           icon: const Icon(Icons.remove_circle_outline),
-          onPressed: selectedStanding > 0
+          onPressed: totalStanding > 0
               ? () => setState(() => selectedStanding--)
               : null,
         ),
         Text(
-          'Standing: ${isDriver ? standingCount + selectedStanding : selectedStanding}',
+          'Standing: $totalStanding',
           style: const TextStyle(fontSize: 16),
         ),
         IconButton(
@@ -272,6 +254,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     }
 
     final totalSelected = selectedSeats.length + selectedStanding;
+    final isButtonEnabled = isDriver || totalSelected == widget.seatCount;
 
     return Scaffold(
       appBar: AppBar(
@@ -286,14 +269,16 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
               alignment: Alignment.centerLeft,
               child: Padding(
                 padding: EdgeInsets.only(bottom: 6),
-                child: Icon(Icons.directions_bus_filled, size: 30, color: Colors.black87),
+                child: Icon(Icons.directions_bus_filled,
+                    size: 30, color: Colors.black87),
               ),
             ),
             Text(
               isDriver
                   ? "Tap seats and adjust standing to update"
                   : "Select your seats and standing spots",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 10),
             ...frontSeats,
@@ -314,14 +299,13 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
             ),
             const SizedBox(height: 10),
             ElevatedButton(
-              onPressed: (totalSelected == widget.seatCount || isDriver)
-                  ? _confirmSeatSelection
-                  : null,
+              onPressed: isButtonEnabled ? _confirmSeatSelection : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: isDriver ? Colors.teal : Colors.blue,
                 minimumSize: const Size(double.infinity, 45),
               ),
-              child: Text(isDriver ? "Update Seats & Standing" : "Confirm Selection"),
+              child: Text(
+                  isDriver ? "Update Seats & Standing" : "Confirm Selection"),
             ),
           ],
         ),

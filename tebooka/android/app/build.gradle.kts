@@ -13,6 +13,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true   // <<-- Correct syntax for Kotlin DSL
     }
 
     kotlinOptions {
@@ -31,7 +32,7 @@ android {
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -51,5 +52,6 @@ dependencies {
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-firestore")
 
-    // Other dependencies handled via pubspec.yaml (image_picker, url_launcher)
+    // Add core library desugaring dependency here:
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

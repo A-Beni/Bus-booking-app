@@ -34,12 +34,14 @@ class _TicketPageState extends State<TicketPage> {
   String passengerName = '';
   String driverName = '';
   String ticketId = '';
+  int standingCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadPassengerInfo();
     _loadDriverInfo();
+    _loadStandingTickets();
     _generateTicketId();
   }
 
@@ -65,6 +67,30 @@ class _TicketPageState extends State<TicketPage> {
         driverName = doc.data()?['name'] ?? 'Driver';
       });
     }
+  }
+
+  Future<void> _loadStandingTickets() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('tickets')
+        .where('passengerId', isEqualTo: uid)
+        .where('from', isEqualTo: widget.from)
+        .where('to', isEqualTo: widget.to)
+        .where('tripDate', isEqualTo: Timestamp.fromDate(widget.tripDate))
+        .get();
+
+    int count = 0;
+    for (var doc in snapshot.docs) {
+      if (doc['seatNumber'] == 'Standing') {
+        count++;
+      }
+    }
+
+    setState(() {
+      standingCount = count;
+    });
   }
 
   void _generateTicketId() {
@@ -123,9 +149,9 @@ class _TicketPageState extends State<TicketPage> {
           to: widget.to,
           tripDate: widget.tripDate,
           tripTime: widget.tripTime,
-          seats: widget.selectedSeats.length,
-          distanceKm: null, // Optional: replace with actual value
-          etaMinutes: null, // Optional: replace with actual value
+          seats: widget.selectedSeats.length + standingCount,
+          distanceKm: null,
+          etaMinutes: null,
           driverId: widget.driverId,
         ),
       ),
@@ -136,6 +162,11 @@ class _TicketPageState extends State<TicketPage> {
   Widget build(BuildContext context) {
     final tripTimeStr = "${widget.tripTime.hour.toString().padLeft(2, '0')}:${widget.tripTime.minute.toString().padLeft(2, '0')}";
     final tripDateStr = "${widget.tripDate.day}/${widget.tripDate.month}/${widget.tripDate.year}";
+
+    final allSeats = [
+      ...widget.selectedSeats.map((e) => "A$e"),
+      ...List.generate(standingCount, (i) => "ST")
+    ];
 
     return Scaffold(
       backgroundColor: const Color(0xFFE0ECF8),
@@ -165,7 +196,7 @@ class _TicketPageState extends State<TicketPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Top buttons
+                // Buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -185,7 +216,7 @@ class _TicketPageState extends State<TicketPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // Ticket content
+                // Ticket Header
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: const BoxDecoration(
@@ -194,6 +225,8 @@ class _TicketPageState extends State<TicketPage> {
                   ),
                   child: const Icon(Icons.directions_bus, color: Colors.white, size: 40),
                 ),
+
+                // Trip Info
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
                   child: Row(
@@ -226,6 +259,8 @@ class _TicketPageState extends State<TicketPage> {
                   ),
                 ),
                 const Divider(),
+
+                // Passenger + Seat Info
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   child: Row(
@@ -241,13 +276,15 @@ class _TicketPageState extends State<TicketPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Seat'),
-                          Text(widget.selectedSeats.map((e) => 'A$e').join(', '), style: const TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Seat(s)'),
+                          Text(allSeats.join(', '), style: const TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       )
                     ],
                   ),
                 ),
+
+                // Driver and Fare
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   child: Row(
@@ -269,6 +306,8 @@ class _TicketPageState extends State<TicketPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Barcode
                 BarcodeWidget(
                   data: ticketId,
                   barcode: Barcode.code128(),
