@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'dart:math' show cos, sqrt, asin;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -41,18 +42,17 @@ class _MapPageState extends State<MapPage> {
   @override
   void initState() {
     super.initState();
-    _loadIcons().then((_) {
-      _requestLocationPermission();
-    });
+    _loadIcons();
   }
 
   Future<void> _loadIcons() async {
-    _busIcon = await _createIcon(Icons.directions_bus, Colors.blue, size: 100, iconSize: 80);
-    _pickupIcon = await _createIcon(Icons.location_pin, Colors.green, size: 100, iconSize: 80);
+    _busIcon = await _createIcon(Icons.directions_bus, Colors.blue);
+    _pickupIcon = await _createIcon(Icons.location_pin, Colors.green);
+    if (mounted) setState(() {});
+    _requestLocationPermission();
   }
 
-  Future<BitmapDescriptor> _createIcon(IconData icon, Color color,
-      {double size = 100, double iconSize = 80}) async {
+  Future<BitmapDescriptor> _createIcon(IconData icon, Color color, {double size = 100, double iconSize = 80}) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final painter = TextPainter(
@@ -67,7 +67,6 @@ class _MapPageState extends State<MapPage> {
       ),
       textDirection: TextDirection.ltr,
     );
-
     painter.layout();
     painter.paint(canvas, Offset((size - iconSize) / 2, (size - iconSize) / 2));
     final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
@@ -80,7 +79,6 @@ class _MapPageState extends State<MapPage> {
     if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
       permission = await Geolocator.requestPermission();
     }
-
     if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
       setState(() => _locationPermissionGranted = true);
       _setPassengerLocation();
@@ -102,7 +100,6 @@ class _MapPageState extends State<MapPage> {
         'destination': widget.passengerDestination,
         'timestamp': FieldValue.serverTimestamp(),
       });
-
       setState(() {
         _selectedPickup = LatLng(pos.latitude, pos.longitude);
       });
@@ -117,7 +114,6 @@ class _MapPageState extends State<MapPage> {
         'longitude': position.longitude,
       });
     }
-
     setState(() {
       _selectedPickup = position;
     });
@@ -134,6 +130,8 @@ class _MapPageState extends State<MapPage> {
       Set<Polyline> tempPolylines = {};
 
       final userPos = await Geolocator.getCurrentPosition();
+      LatLng passengerLocation = LatLng(userPos.latitude, userPos.longitude);
+
       double minDistance = double.infinity;
       String closestDriverId = '';
       String closestFrom = 'Unknown';
@@ -142,53 +140,50 @@ class _MapPageState extends State<MapPage> {
         final data = doc.data();
         final driverId = doc.id;
 
-        if (data.containsKey('latitude') && data.containsKey('longitude')) {
+        if (data.containsKey('latitude') && data.containsKey('longitude') && data['polyline'] != null) {
           final LatLng driverPos = LatLng(data['latitude'], data['longitude']);
+          List<LatLng> routePoints = _decodePolyline(data['polyline']);
 
-          final distance = Geolocator.distanceBetween(
-            userPos.latitude,
-            userPos.longitude,
-            driverPos.latitude,
-            driverPos.longitude,
-          );
+          if (_isPassengerNearPolyline(routePoints, passengerLocation, 500)) {
+            final distance = Geolocator.distanceBetween(
+              userPos.latitude, userPos.longitude, driverPos.latitude, driverPos.longitude,
+            );
 
-          if (distance < minDistance) {
-            minDistance = distance;
-            closestFrom = data['from'] ?? "Unknown";
-            closestDriverId = driverId;
-          }
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestFrom = data['from'] ?? "Unknown";
+              closestDriverId = driverId;
+            }
 
-          tempMarkers.add(
-            Marker(
-              markerId: MarkerId('driver_$driverId'),
-              position: driverPos,
-              icon: _busIcon ?? BitmapDescriptor.defaultMarker,
-              infoWindow: InfoWindow(
-                title: data['busPlate'] ?? 'Bus',
-                snippet: 'From ${data['from']} to ${data['to']}',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingPage(
-                        from: data['from'],
-                        to: data['to'],
-                        tripDate: DateTime.now(),
-                        tripTime: TimeOfDay.now(),
-                        seats: widget.seats,
-                        distanceKm: distance / 1000,
-                        etaMinutes: (distance / 500 * 60).toInt(),
-                        driverId: driverId,
+            tempMarkers.add(
+              Marker(
+                markerId: MarkerId('driver_$driverId'),
+                position: driverPos,
+                icon: _busIcon ?? BitmapDescriptor.defaultMarker,
+                infoWindow: InfoWindow(
+                  title: data['busPlate'] ?? 'Bus',
+                  snippet: 'From ${data['from']} to ${data['to']}',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BookingPage(
+                          from: data['from'],
+                          to: data['to'],
+                          tripDate: DateTime.now(),
+                          tripTime: TimeOfDay.now(),
+                          seats: widget.seats,
+                          distanceKm: distance / 1000,
+                          etaMinutes: (distance / 500 * 60).toInt(),
+                          driverId: driverId,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          );
+            );
 
-          if (data['polyline'] != null) {
-            List<LatLng> routePoints = _decodePolyline(data['polyline']);
             tempPolylines.add(
               Polyline(
                 polylineId: PolylineId('route_$driverId'),
@@ -201,7 +196,6 @@ class _MapPageState extends State<MapPage> {
         }
       }
 
-      // Add pickup marker only once after loading icons
       if (_selectedPickup != null && _pickupIcon != null) {
         tempMarkers.add(
           Marker(
@@ -222,6 +216,21 @@ class _MapPageState extends State<MapPage> {
         polylines = tempPolylines;
       });
     });
+  }
+
+  bool _isPassengerNearPolyline(List<LatLng> polyline, LatLng passenger, double thresholdMeters) {
+    for (final point in polyline) {
+      final dist = _calculateDistance(point.latitude, point.longitude, passenger.latitude, passenger.longitude);
+      if (dist <= thresholdMeters) return true;
+    }
+    return false;
+  }
+
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const p = 0.017453292519943295;
+    final a = 0.5 - cos((lat2 - lat1) * p) / 2 +
+        cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2;
+    return 12742000 * asin(sqrt(a));
   }
 
   List<LatLng> _decodePolyline(String encoded) {
@@ -251,7 +260,6 @@ class _MapPageState extends State<MapPage> {
 
       points.add(LatLng(lat / 1E5, lng / 1E5));
     }
-
     return points;
   }
 
@@ -271,7 +279,6 @@ class _MapPageState extends State<MapPage> {
                 );
                 return;
               }
-
               Navigator.push(
                 context,
                 MaterialPageRoute(

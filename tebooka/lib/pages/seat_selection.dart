@@ -39,9 +39,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   bool isDriver = false;
   bool isLoading = true;
 
-  // standing state (passenger: bool; driver: int count)
-  bool isStanding = false; // passenger standing toggle
-  int standingCount = 0; // driver standing count
+  int standingCount = 0;
 
   @override
   void initState() {
@@ -70,13 +68,10 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           standingCount = data['standingCount'] as int;
         }
       }
-      selectedSeats = [];
     } else {
       if (widget.reservedSeats != null) {
         reservedSeats = widget.reservedSeats!;
       }
-      selectedSeats = [];
-      isStanding = false;
     }
 
     setState(() => isLoading = false);
@@ -88,7 +83,6 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
     if (isDriver) {
       final docRef = FirebaseFirestore.instance.collection('drivers').doc(uid);
-      // Update reserved seats list:
       List<int> updatedReservedSeats = List<int>.from(reservedSeats);
       for (int seat in selectedSeats) {
         if (updatedReservedSeats.contains(seat)) {
@@ -98,7 +92,6 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         }
       }
 
-      // Update Firestore:
       await docRef.set({
         'reservedSeats': updatedReservedSeats,
         'standingCount': standingCount,
@@ -129,10 +122,10 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         Navigator.pop(context);
       }
     } else {
-      // Passenger side: return seats or standing bool
       Navigator.pop(context, {
-        'selectedSeats': isStanding ? [] : selectedSeats,
-        'isStanding': isStanding,
+        'selectedSeats': selectedSeats,
+        'standingSpots': standingCount,
+        'totalSpots': widget.seatCount,
       });
     }
   }
@@ -140,10 +133,11 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   Widget buildSeat(int seatNumber) {
     final isReserved = reservedSeats.contains(seatNumber);
     final isSelected = selectedSeats.contains(seatNumber);
+    final spotsUsed = selectedSeats.length + standingCount;
 
-    // Disable seat selection if passenger standing selected OR driver standing count > 0 (but driver can still select seats)
-    // We allow driver to select seats regardless of standing count.
-    final bool isDisabled = !isDriver && isStanding;
+    final isDisabled = !isDriver &&
+        (spotsUsed >= widget.seatCount && !isSelected) ||
+        (isReserved && !isDriver);
 
     return GestureDetector(
       onTap: isDisabled
@@ -151,21 +145,17 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           : () {
               setState(() {
                 if (isDriver) {
-                  // Driver toggles seat reserved status
                   if (selectedSeats.contains(seatNumber)) {
                     selectedSeats.remove(seatNumber);
                   } else {
                     selectedSeats.add(seatNumber);
                   }
                 } else {
-                  // Passenger selects seat only if not reserved and not standing
                   if (!isReserved) {
                     if (isSelected) {
                       selectedSeats.remove(seatNumber);
-                    } else {
-                      if (selectedSeats.length < widget.seatCount) {
-                        selectedSeats.add(seatNumber);
-                      }
+                    } else if (selectedSeats.length + standingCount < widget.seatCount) {
+                      selectedSeats.add(seatNumber);
                     }
                   }
                 }
@@ -188,69 +178,28 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     );
   }
 
-  Widget buildStandingCounter() {
-    if (isDriver) {
-      // Driver standing count control: show + and - buttons and count
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: standingCount > 0
-                  ? () {
-                      setState(() {
-                        standingCount--;
-                      });
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: standingCount > 0 ? Colors.red : Colors.grey,
-                minimumSize: const Size(50, 40),
-              ),
-              child: const Icon(Icons.remove),
-            ),
-            const SizedBox(width: 20),
-            Text(
-              "Standing Passengers: $standingCount",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 20),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  standingCount++;
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                minimumSize: const Size(50, 40),
-              ),
-              child: const Icon(Icons.add),
-            ),
-          ],
+  Widget buildStandingSelector() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.remove_circle_outline),
+          onPressed: standingCount > 0
+              ? () => setState(() => standingCount--)
+              : null,
         ),
-      );
-    } else {
-      // Passenger: simple toggle button for standing
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: ElevatedButton.icon(
-          icon: Icon(isStanding ? Icons.check_circle : Icons.self_improvement),
-          label: Text(isStanding ? "Standing Selected" : "I Will Stand"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isStanding ? Colors.green : Colors.blueGrey,
-            minimumSize: const Size(180, 40),
-          ),
-          onPressed: () {
-            setState(() {
-              isStanding = !isStanding;
-              if (isStanding) selectedSeats.clear(); // Clear seats if standing
-            });
-          },
+        Text(
+          'Standing: $standingCount',
+          style: const TextStyle(fontSize: 16),
         ),
-      );
-    }
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: (selectedSeats.length + standingCount < widget.seatCount)
+              ? () => setState(() => standingCount++)
+              : null,
+        ),
+      ],
+    );
   }
 
   @override
@@ -265,13 +214,9 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Column(
-            children: [for (int i = 1; i <= 4; i++) buildSeat(i)],
-          ),
+          Column(children: [for (int i = 1; i <= 4; i++) buildSeat(i)]),
           const SizedBox(width: 20),
-          Column(
-            children: [for (int i = 5; i <= 8; i++) buildSeat(i)],
-          ),
+          Column(children: [for (int i = 5; i <= 8; i++) buildSeat(i)]),
         ],
       ),
     ];
@@ -295,7 +240,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isDriver ? 'Driver Seat Management' : 'Select Seats'),
+        title: Text(isDriver ? 'Driver Seat Management' : 'Select Spots'),
         backgroundColor: isDriver ? Colors.teal : Colors.red,
       ),
       body: Padding(
@@ -306,20 +251,20 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
               alignment: Alignment.centerLeft,
               child: Padding(
                 padding: EdgeInsets.only(bottom: 6),
-                child: Icon(Icons.sports_motorsports, size: 30, color: Colors.black87),
+                child: Icon(Icons.directions_bus_filled, size: 30, color: Colors.black87),
               ),
             ),
             Text(
-              isDriver ? "Tap seats to mark/unmark booked" : "Tap to select your seats or stand",
+              isDriver
+                  ? "Tap seats to mark/unmark booked"
+                  : "Select your seats and standing spots",
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 10),
             ...frontSeats,
-
-            buildStandingCounter(),
-
+            const SizedBox(height: 10),
+            if (!isDriver) buildStandingSelector(),
             const Divider(),
-
             Expanded(
               child: ListView.separated(
                 itemCount: mainSeatRows.length,
@@ -327,15 +272,21 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                 separatorBuilder: (_, __) => const SizedBox(height: 5),
               ),
             ),
-
+            const SizedBox(height: 10),
+            Text(
+              "Remaining Spots: ${widget.seatCount - (selectedSeats.length + standingCount)}",
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
+            ),
             const SizedBox(height: 10),
             ElevatedButton(
-              onPressed: (selectedSeats.isNotEmpty || isDriver || isStanding) ? _confirmSeatSelection : null,
+              onPressed: (selectedSeats.length + standingCount == widget.seatCount || isDriver)
+                  ? _confirmSeatSelection
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: isDriver ? Colors.teal : Colors.blue,
                 minimumSize: const Size(double.infinity, 45),
               ),
-              child: Text(isDriver ? "Update Seats & Standing" : (isStanding ? "Confirm Standing" : "Confirm Selection")),
+              child: Text(isDriver ? "Update Seats & Standing" : "Confirm Selection"),
             ),
           ],
         ),
