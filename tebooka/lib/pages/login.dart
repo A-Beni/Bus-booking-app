@@ -27,6 +27,7 @@ class _LoginPageState extends State<LoginPage> {
   final passwordController = TextEditingController();
   bool isLoading = false;
   bool rememberMe = false;
+  bool _obscurePassword = true;  // <-- Added to track password visibility
 
   @override
   void initState() {
@@ -151,7 +152,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: passwordController,
-                      obscureText: true,
+                      obscureText: _obscurePassword,  // <-- Use toggle variable
                       style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         filled: true,
@@ -162,6 +163,17 @@ class _LoginPageState extends State<LoginPage> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
+                        ),
+                        suffixIcon: IconButton(  // <-- Eye icon toggle here
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
                         ),
                       ),
                     ),
