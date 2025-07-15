@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_place/google_place.dart';
 import 'package:uuid/uuid.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'ticket.dart';
 import 'seat_selection.dart';
@@ -99,16 +100,28 @@ class _BookingPageState extends State<BookingPage> {
   Future<void> _goToSeatSelection() async {
     List<int> reserved = [];
 
-    final booked = await FirebaseFirestore.instance
-        .collection('tickets')
-        .where('from', isEqualTo: _fromController.text.trim())
-        .where('to', isEqualTo: _toController.text.trim())
-        .where('tripDate', isEqualTo: Timestamp.fromDate(_tripDate))
-        .get();
+    final startOfDay = DateTime(_tripDate.year, _tripDate.month, _tripDate.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    for (var doc in booked.docs) {
-      final seatNumber = doc['seatNumber'];
-      if (seatNumber is int) reserved.add(seatNumber);
+    try {
+      final booked = await FirebaseFirestore.instance
+          .collection('tickets')
+          .where('from', isEqualTo: _fromController.text.trim())
+          .where('to', isEqualTo: _toController.text.trim())
+          .where('tripDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('tripDate', isLessThan: Timestamp.fromDate(endOfDay))
+          .get();
+
+      for (var doc in booked.docs) {
+        final seatNumber = doc['seatNumber'];
+        if (seatNumber is int) reserved.add(seatNumber);
+      }
+    } catch (e) {
+      print('Error fetching booked seats: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load booked seats: $e')),
+      );
+      return;
     }
 
     final result = await Navigator.push<Map<String, dynamic>>(
@@ -129,7 +142,8 @@ class _BookingPageState extends State<BookingPage> {
     if (result != null &&
         result['selectedSeats'] is List<int> &&
         result['selectedStanding'] is int) {
-      final totalSelected = (result['selectedSeats'] as List<int>).length + (result['selectedStanding'] as int);
+      final totalSelected =
+          (result['selectedSeats'] as List<int>).length + (result['selectedStanding'] as int);
       if (totalSelected == _seats) {
         setState(() {
           selectedSeats = List<int>.from(result['selectedSeats']);
@@ -156,6 +170,12 @@ class _BookingPageState extends State<BookingPage> {
 
     if (uid != null && (selectedSeats.length + selectedStanding == _seats)) {
       try {
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': widget.driverId ?? '',
+          'message': 'New booking from $uid: $_seats seat(s), trip on $_tripDate',
+          'timestamp': Timestamp.now(),
+        });
+
         for (var seat in selectedSeats) {
           await FirebaseFirestore.instance.collection('tickets').add({
             'passengerId': uid,
@@ -198,6 +218,23 @@ class _BookingPageState extends State<BookingPage> {
           ),
         );
 
+        // ✅ ADDED: Trigger Cloud Function to send FCM notification
+        try {
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final fcmToken = userDoc.data()?['fcmToken'];
+          if (fcmToken != null) {
+            HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('sendBookingNotification');
+            await callable.call({
+              'fcmToken': fcmToken,
+              'title': 'Booking Confirmed',
+              'body':
+                  'Your booking from ${_fromController.text} to ${_toController.text} on ${_tripDate.day}/${_tripDate.month} at ${_tripTime.format(context)} has been confirmed.',
+            });
+          }
+        } catch (e) {
+          print('❌ Error sending FCM notification: $e');
+        }
+
         await Future.delayed(const Duration(seconds: 2));
         if (!mounted) return;
 
@@ -234,50 +271,53 @@ class _BookingPageState extends State<BookingPage> {
     final googlePlace = GooglePlace(googleApiKey);
     final sessionToken = const Uuid().v4();
 
-    final result = await showDialog<String>(context: context, builder: (context) {
-      TextEditingController search = TextEditingController();
-      List<AutocompletePrediction> predictions = [];
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        TextEditingController search = TextEditingController();
+        List<AutocompletePrediction> predictions = [];
 
-      return StatefulBuilder(builder: (context, setState) {
-        Future<void> onChanged(String val) async {
-          if (val.isNotEmpty) {
-            final res = await googlePlace.autocomplete.get(val, sessionToken: sessionToken);
-            if (res != null && res.predictions != null) {
-              setState(() => predictions = res.predictions!);
+        return StatefulBuilder(builder: (context, setState) {
+          Future<void> onChanged(String val) async {
+            if (val.isNotEmpty) {
+              final res = await googlePlace.autocomplete.get(val, sessionToken: sessionToken);
+              if (res != null && res.predictions != null) {
+                setState(() => predictions = res.predictions!);
+              }
             }
           }
-        }
 
-        return AlertDialog(
-          title: const Text("Search location"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                autofocus: true,
-                controller: search,
-                onChanged: onChanged,
-                decoration: const InputDecoration(hintText: "Enter place"),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  itemCount: predictions.length,
-                  itemBuilder: (context, index) {
-                    final p = predictions[index];
-                    return ListTile(
-                      title: Text(p.description ?? ''),
-                      onTap: () => Navigator.pop(context, p.description),
-                    );
-                  },
+          return AlertDialog(
+            title: const Text("Search location"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  autofocus: true,
+                  controller: search,
+                  onChanged: onChanged,
+                  decoration: const InputDecoration(hintText: "Enter place"),
                 ),
-              ),
-            ],
-          ),
-        );
-      });
-    });
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 200,
+                  child: ListView.builder(
+                    itemCount: predictions.length,
+                    itemBuilder: (context, index) {
+                      final p = predictions[index];
+                      return ListTile(
+                        title: Text(p.description ?? ''),
+                        onTap: () => Navigator.pop(context, p.description),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        });
+      },
+    );
 
     if (result != null) {
       setState(() {
@@ -319,33 +359,61 @@ class _BookingPageState extends State<BookingPage> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const Text("🚌 Booking Summary", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const Text("🚌 Booking Summary",
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
-                    _infoRow("From", TextButton(onPressed: () => _selectPlace(_fromController), child: Text(_fromController.text))),
-                    _infoRow("To", TextButton(onPressed: () => _selectPlace(_toController), child: Text(_toController.text))),
-                    _infoRow("Date", TextButton(onPressed: _pickDate, child: Text("${_tripDate.day}/${_tripDate.month}/${_tripDate.year}"))),
-                    _infoRow("Time", TextButton(onPressed: _pickTime, child: Text("${_tripTime.hour}:${_tripTime.minute.toString().padLeft(2, '0')}"))),
-                    _infoRow("Seats", DropdownButton<int>(
-                      value: _seats,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _seats = val;
-                            selectedSeats.clear();
-                            selectedStanding = 0;
-                          });
-                        }
-                      },
-                      items: List.generate(10, (i) => i + 1).map((e) => DropdownMenuItem(value: e, child: Text("$e"))).toList(),
-                    )),
-                    if (widget.distanceKm != null) _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
+                    _infoRow(
+                        "From",
+                        TextButton(
+                            onPressed: () => _selectPlace(_fromController),
+                            child: Text(_fromController.text))),
+                    _infoRow(
+                        "To",
+                        TextButton(
+                            onPressed: () => _selectPlace(_toController),
+                            child: Text(_toController.text))),
+                    _infoRow(
+                        "Date",
+                        TextButton(
+                            onPressed: _pickDate,
+                            child: Text(
+                                "${_tripDate.day}/${_tripDate.month}/${_tripDate.year}"))),
+                    _infoRow(
+                        "Time",
+                        TextButton(
+                            onPressed: _pickTime,
+                            child: Text(
+                                "${_tripTime.hour}:${_tripTime.minute.toString().padLeft(2, '0')}"))),
+                    _infoRow(
+                      "Seats",
+                      DropdownButton<int>(
+                        value: _seats,
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _seats = val;
+                              selectedSeats.clear();
+                              selectedStanding = 0;
+                            });
+                          }
+                        },
+                        items: List.generate(10, (i) => i + 1)
+                            .map((e) => DropdownMenuItem(value: e, child: Text("$e")))
+                            .toList(),
+                      ),
+                    ),
+                    if (widget.distanceKm != null)
+                      _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
                     if (widget.etaMinutes != null) _infoRow("ETA", Text("${widget.etaMinutes} min")),
-                    if (driverName != null) _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
+                    if (driverName != null)
+                      _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
                     if (selectedSeats.isNotEmpty || selectedStanding > 0)
-                      _infoRow("Your Selection", Text([
-                        ...selectedSeats.map((e) => "A$e"),
-                        ...List.generate(selectedStanding, (i) => "ST")
-                      ].join(', '))),
+                      _infoRow(
+                          "Your Selection",
+                          Text([
+                            ...selectedSeats.map((e) => "A$e"),
+                            ...List.generate(selectedStanding, (i) => "ST")
+                          ].join(', '))),
                     const SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: _goToSeatSelection,

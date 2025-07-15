@@ -277,10 +277,15 @@ class _DriverMapPageState extends State<DriverMapPage> {
     int count = 0;
     for (var doc in snapshot.docs) {
       final data = doc.data();
-      double? lat = data['latitude'];
-      double? lng = data['longitude'];
+      double? lat = data['latitude']?.toDouble();
+      double? lng = data['longitude']?.toDouble();
       if (lat != null && lng != null) {
-        double distance = _calculateDistance(_currentPosition.latitude, _currentPosition.longitude, lat, lng);
+        double distance = _calculateDistance(
+          _currentPosition.latitude,
+          _currentPosition.longitude,
+          lat,
+          lng,
+        );
         if (distance <= 100) count++;
       }
     }

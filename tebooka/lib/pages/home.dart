@@ -71,6 +71,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _carouselTimer.cancel();
+    fromController.dispose();
+    toController.dispose();
     super.dispose();
   }
 
@@ -137,7 +139,7 @@ class _HomePageState extends State<HomePage> {
                               localSetState(() => predictions = []);
                             }
                           } catch (e) {
-                            print('Google Places API Error: $e');
+                            // Optionally log or handle errors gracefully
                             localSetState(() => predictions = []);
                           }
                         },
@@ -258,6 +260,7 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Greeting + profile icon
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -277,10 +280,12 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 8),
               Text("What is your next trip?", style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.6))),
               const SizedBox(height: 14),
 
+              // Image carousel
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
                 child: Container(
@@ -313,6 +318,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
+              // Track your bus button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(

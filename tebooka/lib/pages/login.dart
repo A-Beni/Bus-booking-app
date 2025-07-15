@@ -7,6 +7,7 @@ import 'home.dart';
 import 'driver_home.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // <-- Add FCM import
 
 class LoginPage extends StatefulWidget {
   final bool isDarkMode;
@@ -27,7 +28,7 @@ class _LoginPageState extends State<LoginPage> {
   final passwordController = TextEditingController();
   bool isLoading = false;
   bool rememberMe = false;
-  bool _obscurePassword = true;  // <-- Added to track password visibility
+  bool _obscurePassword = true; // Track password visibility
 
   @override
   void initState() {
@@ -59,31 +60,46 @@ class _LoginPageState extends State<LoginPage> {
 
     String? result = await AuthService().signInWithEmail(email, password);
 
+    if (result != null) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
+      return;
+    }
+
+    // User successfully logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // Get FCM token
+      String? fcmToken = await FirebaseMessaging.instance.getToken();
+
+      // Save FCM token to user document in Firestore
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'fcmToken': fcmToken,
+        'lastLogin': FieldValue.serverTimestamp(),
+      });
+        }
+
     setState(() => isLoading = false);
 
-    if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
-    } else {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final data = userDoc.data();
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final data = userDoc.data();
 
-      if (data != null && data['role'] == 'driver') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DriverHomePage()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => HomePage(
-              isDarkMode: widget.isDarkMode,
-              onThemeChanged: widget.onThemeChanged,
-            ),
+    if (data != null && data['role'] == 'driver') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DriverHomePage()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomePage(
+            isDarkMode: widget.isDarkMode,
+            onThemeChanged: widget.onThemeChanged,
           ),
-        );
-      }
+        ),
+      );
     }
   }
 
@@ -116,7 +132,7 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           Positioned.fill(
             child: Image.asset(
-              'assets/man.jpg', 
+              'assets/man.jpg',
               fit: BoxFit.cover,
             ),
           ),
@@ -152,7 +168,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: passwordController,
-                      obscureText: _obscurePassword,  // <-- Use toggle variable
+                      obscureText: _obscurePassword,
                       style: const TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         filled: true,
@@ -164,7 +180,7 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
                         ),
-                        suffixIcon: IconButton(  // <-- Eye icon toggle here
+                        suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword ? Icons.visibility_off : Icons.visibility,
                             color: Colors.grey,

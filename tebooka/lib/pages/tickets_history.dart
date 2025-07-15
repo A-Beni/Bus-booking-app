@@ -35,7 +35,6 @@ class TicketsHistoryPage extends StatelessWidget {
         seenTripKeys.add(uniqueKey);
       }
 
-      // If we already have 10 unique tickets, stop here
       if (uniqueTickets.length >= 10) break;
     }
 
@@ -83,6 +82,16 @@ class TicketsHistoryPage extends StatelessWidget {
               final seatNumber = ticket['seatNumber'];
               final id = ticket['id'] ?? '';
 
+              final timeParts = timeStr.split(':');
+              final hour = int.tryParse(timeParts[0]) ?? 0;
+              final minute = int.tryParse(timeParts[1]) ?? 0;
+
+              // Ensure valid seat list
+              List<int> selectedSeats = [];
+              if (seatNumber is int) {
+                selectedSeats = [seatNumber];
+              }
+
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
@@ -90,10 +99,6 @@ class TicketsHistoryPage extends StatelessWidget {
                   subtitle: Text("Route: $from → $to"),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
-                    final timeParts = timeStr.split(':');
-                    final hour = int.tryParse(timeParts[0]) ?? 0;
-                    final minute = int.tryParse(timeParts[1]) ?? 0;
-
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -102,7 +107,7 @@ class TicketsHistoryPage extends StatelessWidget {
                           to: to,
                           tripDate: tripDate,
                           tripTime: TimeOfDay(hour: hour, minute: minute),
-                          selectedSeats: [seatNumber ?? 1],
+                          selectedSeats: selectedSeats,
                           fare: fare,
                           driverId: driverId,
                         ),

@@ -4,6 +4,7 @@ import 'login.dart';
 import 'email_verification_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // <-- Add FCM import
 
 class SignInPage extends StatefulWidget {
   final bool isDarkMode;
@@ -54,6 +55,7 @@ class _SignInPageState extends State<SignInPage> {
     } else {
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        // Save user data in Firestore
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'uid': user.uid,
           'firstName': firstName,
@@ -62,7 +64,13 @@ class _SignInPageState extends State<SignInPage> {
           'role': role,
           'createdAt': FieldValue.serverTimestamp(),
         });
-      }
+
+        // Get and save FCM token for push notifications
+        String? fcmToken = await FirebaseMessaging.instance.getToken();
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'fcmToken': fcmToken,
+        });
+            }
 
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Registration successful. Check your email for verification."),
