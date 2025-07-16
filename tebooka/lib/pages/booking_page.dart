@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_place/google_place.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'ticket.dart';
 import 'seat_selection.dart';
 
@@ -58,6 +58,15 @@ class _BookingPageState extends State<BookingPage> {
     _tripTime = widget.tripTime;
     _seats = widget.seats;
     if (widget.driverId != null) _loadDriverDetails(widget.driverId!);
+
+    // FCM token listener for updates
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      print("🔁 New FCM token: $newToken");
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'fcmToken': newToken});
+      }
+    });
   }
 
   Future<void> _loadDriverDetails(String id) async {
@@ -67,6 +76,117 @@ class _BookingPageState extends State<BookingPage> {
         driverName = doc['name'];
         driverPhone = doc['phone'];
       });
+    }
+  }
+
+  Future<void> confirmBooking(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    double fare = (widget.distanceKm ?? 0) * 100;
+
+    if (uid != null && (selectedSeats.length + selectedStanding == _seats)) {
+      try {
+        for (var seat in selectedSeats) {
+          await FirebaseFirestore.instance.collection('tickets').add({
+            'passengerId': uid,
+            'from': _fromController.text.trim(),
+            'to': _toController.text.trim(),
+            'seats': _seats,
+            'tripDate': Timestamp.fromDate(_tripDate),
+            'tripTime': _tripTime.format(context),
+            'seatNumber': seat,
+            'timestamp': Timestamp.now(),
+            'fare': fare,
+            if (widget.driverId != null) 'driverId': widget.driverId!,
+            if (widget.distanceKm != null) 'distanceKm': widget.distanceKm!,
+            if (widget.etaMinutes != null) 'etaMinutes': widget.etaMinutes!,
+          });
+        }
+
+        for (int i = 0; i < selectedStanding; i++) {
+          await FirebaseFirestore.instance.collection('tickets').add({
+            'passengerId': uid,
+            'from': _fromController.text.trim(),
+            'to': _toController.text.trim(),
+            'seats': _seats,
+            'tripDate': Timestamp.fromDate(_tripDate),
+            'tripTime': _tripTime.format(context),
+            'seatNumber': 'Standing',
+            'timestamp': Timestamp.now(),
+            'fare': fare,
+            if (widget.driverId != null) 'driverId': widget.driverId!,
+            if (widget.distanceKm != null) 'distanceKm': widget.distanceKm!,
+            if (widget.etaMinutes != null) 'etaMinutes': widget.etaMinutes!,
+          });
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Booking confirmed!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // ✅ Fixed FCM token block
+        try {
+          final settings = await FirebaseMessaging.instance.requestPermission();
+          if (settings.authorizationStatus != AuthorizationStatus.authorized) {
+            print("⚠️ FCM permission not granted.");
+            return;
+          }
+
+          final fcmToken = await FirebaseMessaging.instance.getToken();
+
+          if (fcmToken == null || fcmToken.isEmpty) {
+            print("⚠️ Device has no valid FCM token.");
+            return;
+          }
+
+          print("📬 Sending FCM token to cloud function: $fcmToken");
+
+          final callable = FirebaseFunctions.instance.httpsCallable('sendBookingNotification');
+          final result = await callable.call({
+            'fcmToken': fcmToken,
+            'title': 'Booking Confirmed',
+            'body':
+                'Your booking from ${_fromController.text} to ${_toController.text} on '
+                '${_tripDate.day}/${_tripDate.month} at ${_tripTime.format(context)} has been confirmed.',
+          });
+
+          print("✅ FCM Notification result: ${result.data}");
+        } catch (e) {
+          print('❌ Error sending FCM notification: $e');
+        }
+
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TicketPage(
+              from: _fromController.text.trim(),
+              to: _toController.text.trim(),
+              tripDate: _tripDate,
+              tripTime: _tripTime,
+              selectedSeats: selectedSeats,
+              fare: fare,
+              driverId: widget.driverId ?? '',
+            ),
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error booking tickets: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Please select all seats before confirming.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -164,160 +284,54 @@ class _BookingPageState extends State<BookingPage> {
     }
   }
 
-  Future<void> notifyDriver(BuildContext context) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    double fare = (widget.distanceKm ?? 0) * 100;
-
-    if (uid != null && (selectedSeats.length + selectedStanding == _seats)) {
-      try {
-        await FirebaseFirestore.instance.collection('notifications').add({
-          'userId': widget.driverId ?? '',
-          'message': 'New booking from $uid: $_seats seat(s), trip on $_tripDate',
-          'timestamp': Timestamp.now(),
-        });
-
-        for (var seat in selectedSeats) {
-          await FirebaseFirestore.instance.collection('tickets').add({
-            'passengerId': uid,
-            'from': _fromController.text.trim(),
-            'to': _toController.text.trim(),
-            'seats': _seats,
-            'tripDate': Timestamp.fromDate(_tripDate),
-            'tripTime': _tripTime.format(context),
-            'seatNumber': seat,
-            'timestamp': Timestamp.now(),
-            'fare': fare,
-            if (widget.driverId != null) 'driverId': widget.driverId!,
-            if (widget.distanceKm != null) 'distanceKm': widget.distanceKm!,
-            if (widget.etaMinutes != null) 'etaMinutes': widget.etaMinutes!,
-          });
-        }
-
-        for (int i = 0; i < selectedStanding; i++) {
-          await FirebaseFirestore.instance.collection('tickets').add({
-            'passengerId': uid,
-            'from': _fromController.text.trim(),
-            'to': _toController.text.trim(),
-            'seats': _seats,
-            'tripDate': Timestamp.fromDate(_tripDate),
-            'tripTime': _tripTime.format(context),
-            'seatNumber': 'Standing',
-            'timestamp': Timestamp.now(),
-            'fare': fare,
-            if (widget.driverId != null) 'driverId': widget.driverId!,
-            if (widget.distanceKm != null) 'distanceKm': widget.distanceKm!,
-            if (widget.etaMinutes != null) 'etaMinutes': widget.etaMinutes!,
-          });
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 Booking confirmed! Driver has been notified.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-
-        // ✅ ADDED: Trigger Cloud Function to send FCM notification
-        try {
-          final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-          final fcmToken = userDoc.data()?['fcmToken'];
-          if (fcmToken != null) {
-            HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('sendBookingNotification');
-            await callable.call({
-              'fcmToken': fcmToken,
-              'title': 'Booking Confirmed',
-              'body':
-                  'Your booking from ${_fromController.text} to ${_toController.text} on ${_tripDate.day}/${_tripDate.month} at ${_tripTime.format(context)} has been confirmed.',
-            });
-          }
-        } catch (e) {
-          print('❌ Error sending FCM notification: $e');
-        }
-
-        await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => TicketPage(
-              from: _fromController.text.trim(),
-              to: _toController.text.trim(),
-              tripDate: _tripDate,
-              tripTime: _tripTime,
-              selectedSeats: selectedSeats,
-              fare: fare,
-              driverId: widget.driverId ?? '',
-            ),
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error booking tickets: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Please select all seats before confirming.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-  }
-
   Future<void> _selectPlace(TextEditingController controller) async {
     final googlePlace = GooglePlace(googleApiKey);
     final sessionToken = const Uuid().v4();
 
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        TextEditingController search = TextEditingController();
-        List<AutocompletePrediction> predictions = [];
+    final result = await showDialog<String>(context: context, builder: (context) {
+      TextEditingController search = TextEditingController();
+      List<AutocompletePrediction> predictions = [];
 
-        return StatefulBuilder(builder: (context, setState) {
-          Future<void> onChanged(String val) async {
-            if (val.isNotEmpty) {
-              final res = await googlePlace.autocomplete.get(val, sessionToken: sessionToken);
-              if (res != null && res.predictions != null) {
-                setState(() => predictions = res.predictions!);
-              }
+      return StatefulBuilder(builder: (context, setState) {
+        Future<void> onChanged(String val) async {
+          if (val.isNotEmpty) {
+            final res = await googlePlace.autocomplete.get(val, sessionToken: sessionToken);
+            if (res != null && res.predictions != null) {
+              setState(() => predictions = res.predictions!);
             }
           }
+        }
 
-          return AlertDialog(
-            title: const Text("Search location"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  autofocus: true,
-                  controller: search,
-                  onChanged: onChanged,
-                  decoration: const InputDecoration(hintText: "Enter place"),
+        return AlertDialog(
+          title: const Text("Search location"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                autofocus: true,
+                controller: search,
+                onChanged: onChanged,
+                decoration: const InputDecoration(hintText: "Enter place"),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  itemCount: predictions.length,
+                  itemBuilder: (context, index) {
+                    final p = predictions[index];
+                    return ListTile(
+                      title: Text(p.description ?? ''),
+                      onTap: () => Navigator.pop(context, p.description),
+                    );
+                  },
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 200,
-                  child: ListView.builder(
-                    itemCount: predictions.length,
-                    itemBuilder: (context, index) {
-                      final p = predictions[index];
-                      return ListTile(
-                        title: Text(p.description ?? ''),
-                        onTap: () => Navigator.pop(context, p.description),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        });
-      },
-    );
+              ),
+            ],
+          ),
+        );
+      });
+    });
 
     if (result != null) {
       setState(() {
@@ -362,28 +376,10 @@ class _BookingPageState extends State<BookingPage> {
                     const Text("🚌 Booking Summary",
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
-                    _infoRow(
-                        "From",
-                        TextButton(
-                            onPressed: () => _selectPlace(_fromController),
-                            child: Text(_fromController.text))),
-                    _infoRow(
-                        "To",
-                        TextButton(
-                            onPressed: () => _selectPlace(_toController),
-                            child: Text(_toController.text))),
-                    _infoRow(
-                        "Date",
-                        TextButton(
-                            onPressed: _pickDate,
-                            child: Text(
-                                "${_tripDate.day}/${_tripDate.month}/${_tripDate.year}"))),
-                    _infoRow(
-                        "Time",
-                        TextButton(
-                            onPressed: _pickTime,
-                            child: Text(
-                                "${_tripTime.hour}:${_tripTime.minute.toString().padLeft(2, '0')}"))),
+                    _infoRow("From", TextButton(onPressed: () => _selectPlace(_fromController), child: Text(_fromController.text))),
+                    _infoRow("To", TextButton(onPressed: () => _selectPlace(_toController), child: Text(_toController.text))),
+                    _infoRow("Date", TextButton(onPressed: _pickDate, child: Text("${_tripDate.day}/${_tripDate.month}/${_tripDate.year}"))),
+                    _infoRow("Time", TextButton(onPressed: _pickTime, child: Text("${_tripTime.hour}:${_tripTime.minute.toString().padLeft(2, '0')}"))),
                     _infoRow(
                       "Seats",
                       DropdownButton<int>(
@@ -402,28 +398,18 @@ class _BookingPageState extends State<BookingPage> {
                             .toList(),
                       ),
                     ),
-                    if (widget.distanceKm != null)
-                      _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
+                    if (widget.distanceKm != null) _infoRow("Distance", Text("${widget.distanceKm!.toStringAsFixed(2)} km")),
                     if (widget.etaMinutes != null) _infoRow("ETA", Text("${widget.etaMinutes} min")),
-                    if (driverName != null)
-                      _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
+                    if (driverName != null) _infoRow("Driver", Text("$driverName (${driverPhone ?? 'N/A'})")),
                     if (selectedSeats.isNotEmpty || selectedStanding > 0)
-                      _infoRow(
-                          "Your Selection",
-                          Text([
-                            ...selectedSeats.map((e) => "A$e"),
-                            ...List.generate(selectedStanding, (i) => "ST")
-                          ].join(', '))),
+                      _infoRow("Your Selection", Text([...selectedSeats.map((e) => "A$e"), ...List.generate(selectedStanding, (i) => "ST")].join(', '))),
+                    const SizedBox(height: 20),
+                    ElevatedButton(onPressed: _goToSeatSelection, child: const Text('Select Seat(s)')),
                     const SizedBox(height: 20),
                     ElevatedButton(
-                      onPressed: _goToSeatSelection,
-                      child: const Text('Select Seat(s)'),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: isConfirmEnabled ? () => notifyDriver(context) : null,
+                      onPressed: isConfirmEnabled ? () => confirmBooking(context) : null,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                      child: const Text('Notify Driver & Confirm'),
+                      child: const Text('Confirm Booking'),
                     ),
                   ],
                 ),

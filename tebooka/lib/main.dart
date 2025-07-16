@@ -8,46 +8,40 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'app.dart';
 
-// Create a global instance of FlutterLocalNotificationsPlugin
+// Global instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-// Background handler
+// ✅ Background handler
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print('Handling a background message: ${message.messageId}');
+  print('📩 Handling background message: ${message.messageId}');
 }
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  // ✅ STEP 2: Store FCM Token when user logs in
+  // ✅ Setup FCM
   FirebaseMessaging messaging = FirebaseMessaging.instance;
-  String? fcmToken = await messaging.getToken();
-  User? user = FirebaseAuth.instance.currentUser;
 
-  if (user != null) {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .update({'fcmToken': fcmToken});
+  // ✅ Request permission explicitly (for Android 13+ and iOS)
+  NotificationSettings settings = await messaging.requestPermission();
+  if (settings.authorizationStatus == AuthorizationStatus.denied) {
+    print('🚫 Notification permission denied');
+  } else {
+    print('✅ Notification permission granted: ${settings.authorizationStatus}');
   }
 
-  // Background message handler
+  // ✅ Register background handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // Request permission
-  await messaging.requestPermission();
+  // ✅ Initialize local notifications
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const initSettings = InitializationSettings(android: androidSettings);
+  await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-  // Initialize local notifications
-  const AndroidInitializationSettings androidInitializationSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initializationSettings =
-      InitializationSettings(android: androidInitializationSettings);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-  // Listen to foreground messages
+  // ✅ Foreground notifications
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     RemoteNotification? notification = message.notification;
     AndroidNotification? android = message.notification?.android;
@@ -70,7 +64,29 @@ void main() async {
     }
   });
 
-  // Theme mode preference
+  // ✅ [Optional] Token listener (prints new tokens)
+  messaging.onTokenRefresh.listen((token) async {
+    print("🔁 New FCM token: $token");
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'fcmToken': token});
+    }
+  });
+
+  // ✅ Store initial FCM token (AFTER permission granted)
+  try {
+    final token = await messaging.getToken();
+    print("📲 Initial FCM Token: $token");
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && token != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'fcmToken': token});
+    }
+  } catch (e) {
+    print("❌ Error fetching/storing FCM token: $e");
+  }
+
+  // Load theme preference
   final prefs = await SharedPreferences.getInstance();
   final isDarkMode = prefs.getBool('isDarkMode') ?? false;
 

@@ -68,9 +68,9 @@ class _SignInPageState extends State<SignInPage> {
         // Get and save FCM token for push notifications
         String? fcmToken = await FirebaseMessaging.instance.getToken();
         await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-          'fcmToken': fcmToken,
+          'fcmToken': fcmToken ?? '',
         });
-            }
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Registration successful. Check your email for verification."),

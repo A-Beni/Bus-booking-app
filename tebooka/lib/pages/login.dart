@@ -74,10 +74,10 @@ class _LoginPageState extends State<LoginPage> {
 
       // Save FCM token to user document in Firestore
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'fcmToken': fcmToken,
+        'fcmToken': fcmToken ?? '',
         'lastLogin': FieldValue.serverTimestamp(),
       });
-        }
+    }
 
     setState(() => isLoading = false);
 

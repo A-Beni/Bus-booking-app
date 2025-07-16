@@ -140,6 +140,8 @@ class _DriverMapPageState extends State<DriverMapPage> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
 
+      if (locData.latitude == null || locData.longitude == null) return;
+
       _currentPosition = LatLng(locData.latitude!, locData.longitude!);
 
       await FirebaseFirestore.instance.collection('drivers').doc(uid).update({
@@ -223,7 +225,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
 
     final data = json.decode(response.body);
     final loc = data['results'][0]['geometry']['location'];
-    return LatLng(loc['lat'], loc['lng']);
+    return LatLng(loc['lat'].toDouble(), loc['lng'].toDouble());
   }
 
   Future<void> _updateRemainingDistance() async {
@@ -231,11 +233,11 @@ class _DriverMapPageState extends State<DriverMapPage> {
     if (dest == null) return;
 
     remainingDistance = _calculateDistance(
-          _currentPosition.latitude,
-          _currentPosition.longitude,
-          dest.latitude,
-          dest.longitude,
-        ) / 1000;
+      _currentPosition.latitude,
+      _currentPosition.longitude,
+      dest.latitude,
+      dest.longitude,
+    ) / 1000;
   }
 
   Future<void> _getAllPassengerMarkers() async {
@@ -250,7 +252,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
     for (var doc in snapshot.docs) {
       final data = doc.data();
       if (data.containsKey('latitude') && data.containsKey('longitude')) {
-        LatLng pos = LatLng(data['latitude'], data['longitude']);
+        LatLng pos = LatLng(data['latitude'].toDouble(), data['longitude'].toDouble());
         tempMarkers.add(
           Marker(
             markerId: MarkerId('passenger_${doc.id}'),
@@ -279,6 +281,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
       final data = doc.data();
       double? lat = data['latitude']?.toDouble();
       double? lng = data['longitude']?.toDouble();
+
       if (lat != null && lng != null) {
         double distance = _calculateDistance(
           _currentPosition.latitude,
@@ -301,7 +304,7 @@ class _DriverMapPageState extends State<DriverMapPage> {
     final dLon = _deg2rad(lon2 - lon1);
     final a = sin(dLat / 2) * sin(dLat / 2) +
         cos(_deg2rad(lat1)) * cos(_deg2rad(lat2)) *
-        sin(dLon / 2) * sin(dLon / 2);
+            sin(dLon / 2) * sin(dLon / 2);
     final c = 2 * atan2(sqrt(a), sqrt(1 - a));
     return R * c;
   }

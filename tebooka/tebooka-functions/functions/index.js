@@ -1,17 +1,36 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+
 admin.initializeApp();
 
 exports.sendBookingNotification = functions.https.onCall(
     async (data, context) => {
-      const fcmToken = data.fcmToken;
-      const title = data.title;
-      const body = data.body;
+      console.log("📨 Received booking notification request:", data);
+
+      if (!data || typeof data !== "object") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Request data must be an object.",
+        );
+      }
+
+      const fcmToken =
+      typeof data.fcmToken === "string" ? data.fcmToken.trim() : "";
+
+      const title =
+      typeof data.title === "string" ?
+        data.title.trim() :
+        "Booking Update";
+
+      const body =
+      typeof data.body === "string" ?
+        data.body.trim() :
+        "You have a new booking notification.";
 
       if (!fcmToken) {
         throw new functions.https.HttpsError(
             "invalid-argument",
-            "FCM token is required",
+            "FCM token must be a non-empty string.",
         );
       }
 
@@ -28,17 +47,27 @@ exports.sendBookingNotification = functions.https.onCall(
             channelId: "default_channel",
           },
         },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+            },
+          },
+        },
       };
 
       try {
         const response = await admin.messaging().send(message);
-        console.log("✅ Notification sent:", response);
-        return {success: true};
+        console.log("✅ Notification sent successfully:", response);
+        return {
+          success: true,
+          messageId: response,
+        };
       } catch (error) {
-        console.error("❌ Error sending notification:", error);
+        console.error("❌ Error sending notification:", error.message, error);
         throw new functions.https.HttpsError(
             "unknown",
-            error.message,
+            "Failed to send notification.",
             error,
         );
       }

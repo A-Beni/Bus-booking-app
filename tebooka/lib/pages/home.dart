@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_place/google_place.dart';
 import 'package:uuid/uuid.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'profile.dart';
 import 'map.dart';
@@ -86,6 +87,57 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> getCurrentLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location services are disabled.')),
+      );
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission denied.')),
+        );
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location permission permanently denied.')),
+      );
+      return;
+    }
+
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    final googlePlace = GooglePlace(googleApiKey);
+    final response = await googlePlace.search.getNearBySearch(
+      Location(lat: position.latitude, lng: position.longitude),
+      10,
+    );
+
+    if (response != null &&
+        response.results != null &&
+        response.results!.isNotEmpty) {
+      final place = response.results!.first;
+      setState(() {
+        fromController.text = place.name ?? "Current Location";
+      });
+    } else {
+      setState(() {
+        fromController.text = "Current Location (${position.latitude}, ${position.longitude})";
+      });
+    }
+  }
+
   Future<void> openSearchModal(TextEditingController controller) async {
     final googlePlace = GooglePlace(googleApiKey);
     final sessionToken = const Uuid().v4();
@@ -138,8 +190,7 @@ class _HomePageState extends State<HomePage> {
                             } else {
                               localSetState(() => predictions = []);
                             }
-                          } catch (e) {
-                            // Optionally log or handle errors gracefully
+                          } catch (_) {
                             localSetState(() => predictions = []);
                           }
                         },
@@ -260,7 +311,6 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Greeting + profile icon
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -268,9 +318,11 @@ class _HomePageState extends State<HomePage> {
                   GestureDetector(
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => ProfilePage(
-                              isDarkMode: widget.isDarkMode,
-                              onThemeChanged: widget.onThemeChanged)));
+                        builder: (_) => ProfilePage(
+                          isDarkMode: widget.isDarkMode,
+                          onThemeChanged: widget.onThemeChanged,
+                        ),
+                      ));
                     },
                     child: const CircleAvatar(
                       radius: 20,
@@ -280,12 +332,9 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 8),
               Text("What is your next trip?", style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.6))),
               const SizedBox(height: 14),
-
-              // Image carousel
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
                 child: Container(
@@ -305,9 +354,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
               Card(
                 elevation: 5,
                 margin: const EdgeInsets.only(bottom: 20),
@@ -317,8 +364,6 @@ class _HomePageState extends State<HomePage> {
                   child: tripForm(),
                 ),
               ),
-
-              // Track your bus button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -407,34 +452,39 @@ class _HomePageState extends State<HomePage> {
       children: [
         Text(label, style: const TextStyle(fontSize: 13)),
         const SizedBox(height: 4),
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.shade400,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.shade400,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
+                child: Icon(icon, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: onTap,
                   child: Text(
                     controller.text.isEmpty ? "Tap to select" : controller.text,
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
-              ],
-            ),
+              ),
+              if (label == "From")
+                IconButton(
+                  icon: const Icon(Icons.my_location, size: 18, color: Colors.blue),
+                  onPressed: getCurrentLocation,
+                ),
+            ],
           ),
         ),
       ],
