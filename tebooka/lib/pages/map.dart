@@ -1,4 +1,6 @@
+// ignore_for_file: use_build_context_synchronously
 import 'dart:ui' as ui;
+import 'dart:async';
 import 'dart:math' show cos, sqrt, asin;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -39,20 +41,29 @@ class _MapPageState extends State<MapPage> {
   BitmapDescriptor? _busIcon;
   BitmapDescriptor? _pickupIcon;
 
+  Timer? _countdownTimer;
+  int _etaCountdown = 0;
+
   @override
   void initState() {
     super.initState();
     _loadIcons();
+
+    // Ensure fallback trigger after delay
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _locationPermissionGranted) _listenToNearbyDrivers();
+    });
   }
 
   Future<void> _loadIcons() async {
     _busIcon = await _createIcon(Icons.directions_bus, Colors.blue);
-    _pickupIcon = await _createIcon(Icons.location_pin, Colors.green);
+    _pickupIcon = await _createIcon(Icons.location_on, Colors.green);
     if (mounted) setState(() {});
     _requestLocationPermission();
   }
 
-  Future<BitmapDescriptor> _createIcon(IconData icon, Color color, {double size = 100, double iconSize = 80}) async {
+  Future<BitmapDescriptor> _createIcon(IconData icon, Color color,
+      {double size = 100, double iconSize = 80}) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final painter = TextPainter(
@@ -81,7 +92,7 @@ class _MapPageState extends State<MapPage> {
     }
     if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
       setState(() => _locationPermissionGranted = true);
-      _setPassengerLocation();
+      await _setPassengerLocation();
       _listenToNearbyDrivers();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -91,19 +102,61 @@ class _MapPageState extends State<MapPage> {
   }
 
   Future<void> _setPassengerLocation() async {
-    final pos = await Geolocator.getCurrentPosition();
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance.collection('passengers').doc(user.uid).set({
+    if (user == null) return;
+
+    final pos = await Geolocator.getCurrentPosition();
+    final LatLng currentLocation = LatLng(pos.latitude, pos.longitude);
+
+    await FirebaseFirestore.instance.collection('passengers').doc(user.uid).set({
+      'latitude': pos.latitude,
+      'longitude': pos.longitude,
+      'destination': widget.passengerDestination,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    setState(() {
+      _selectedPickup = currentLocation;
+      markers.removeWhere((m) => m.markerId == const MarkerId('passenger_location'));
+      markers.add(
+        Marker(
+          markerId: const MarkerId('passenger_location'),
+          position: currentLocation,
+          icon: _pickupIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: 'You Are Here'),
+          zIndex: 3,
+        ),
+      );
+    });
+
+    Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen((Position pos) async {
+      final LatLng newLocation = LatLng(pos.latitude, pos.longitude);
+
+      await FirebaseFirestore.instance.collection('passengers').doc(user.uid).update({
         'latitude': pos.latitude,
         'longitude': pos.longitude,
-        'destination': widget.passengerDestination,
         'timestamp': FieldValue.serverTimestamp(),
       });
+
       setState(() {
-        _selectedPickup = LatLng(pos.latitude, pos.longitude);
+        _selectedPickup = newLocation;
+        markers.removeWhere((m) => m.markerId == const MarkerId('passenger_location'));
+        markers.add(
+          Marker(
+            markerId: const MarkerId('passenger_location'),
+            position: newLocation,
+            icon: _pickupIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            infoWindow: const InfoWindow(title: 'You Are Here'),
+            zIndex: 3,
+          ),
+        );
       });
-    }
+    });
   }
 
   void _updateManualPickup(LatLng position) async {
@@ -116,6 +169,16 @@ class _MapPageState extends State<MapPage> {
     }
     setState(() {
       _selectedPickup = position;
+      markers.removeWhere((m) => m.markerId == const MarkerId('passenger_location'));
+      markers.add(
+        Marker(
+          markerId: const MarkerId('passenger_location'),
+          position: position,
+          icon: _pickupIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: 'You Are Here'),
+          zIndex: 3,
+        ),
+      );
     });
   }
 
@@ -126,7 +189,7 @@ class _MapPageState extends State<MapPage> {
         .where('to', isEqualTo: widget.passengerDestination)
         .snapshots()
         .listen((snapshot) async {
-      Set<Marker> tempMarkers = {};
+      Set<Marker> tempMarkers = {...markers};
       Set<Polyline> tempPolylines = {};
 
       final userPos = await Geolocator.getCurrentPosition();
@@ -140,13 +203,26 @@ class _MapPageState extends State<MapPage> {
         final data = doc.data();
         final driverId = doc.id;
 
-        if (data.containsKey('latitude') && data.containsKey('longitude') && data['polyline'] != null) {
+        if (data.containsKey('latitude') &&
+            data.containsKey('longitude') &&
+            data['latitude'] != null &&
+            data['longitude'] != null &&
+            data['polyline'] != null &&
+            data['polyline'].toString().isNotEmpty) {
           final LatLng driverPos = LatLng(data['latitude'], data['longitude']);
           List<LatLng> routePoints = _decodePolyline(data['polyline']);
 
-          if (_isPassengerNearPolyline(routePoints, passengerLocation, 500)) {
+          if (routePoints.isEmpty) {
+            debugPrint("⚠️ Empty polyline for driver $driverId, skipping.");
+            continue;
+          }
+
+          if (_isPassengerNearPolyline(routePoints, passengerLocation, 1500)) {
             final distance = Geolocator.distanceBetween(
-              userPos.latitude, userPos.longitude, driverPos.latitude, driverPos.longitude,
+              userPos.latitude,
+              userPos.longitude,
+              driverPos.latitude,
+              driverPos.longitude,
             );
 
             if (distance < minDistance) {
@@ -181,6 +257,7 @@ class _MapPageState extends State<MapPage> {
                     );
                   },
                 ),
+                zIndex: 2,
               ),
             );
 
@@ -196,31 +273,39 @@ class _MapPageState extends State<MapPage> {
         }
       }
 
-      if (_selectedPickup != null && _pickupIcon != null) {
-        tempMarkers.add(
-          Marker(
-            markerId: const MarkerId('passenger_pickup'),
-            position: _selectedPickup!,
-            icon: _pickupIcon!,
-            infoWindow: const InfoWindow(title: 'Your Pickup'),
-          ),
-        );
-      }
-
-      setState(() {
-        distanceInKm = minDistance / 1000;
-        estimatedTimeInMin = (distanceInKm / 0.5 * 60).toInt();
-        nearestDriverFrom = closestFrom;
-        nearestDriverId = closestDriverId;
-        markers = tempMarkers;
-        polylines = tempPolylines;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {
+          distanceInKm = minDistance / 1000;
+          estimatedTimeInMin = (distanceInKm / 0.5 * 60).toInt();
+          _etaCountdown = estimatedTimeInMin;
+          _startCountdown();
+          nearestDriverFrom = closestFrom;
+          nearestDriverId = closestDriverId;
+          markers = tempMarkers;
+          polylines = tempPolylines;
+        });
       });
+    });
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    if (_etaCountdown <= 0) return;
+
+    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (_etaCountdown <= 1) {
+        timer.cancel();
+        setState(() => _etaCountdown = 0);
+      } else {
+        setState(() => _etaCountdown--);
+      }
     });
   }
 
   bool _isPassengerNearPolyline(List<LatLng> polyline, LatLng passenger, double thresholdMeters) {
     for (final point in polyline) {
-      final dist = _calculateDistance(point.latitude, point.longitude, passenger.latitude, passenger.longitude);
+      final dist = _calculateDistance(
+          point.latitude, point.longitude, passenger.latitude, passenger.longitude);
       if (dist <= thresholdMeters) return true;
     }
     return false;
@@ -261,6 +346,12 @@ class _MapPageState extends State<MapPage> {
       points.add(LatLng(lat / 1E5, lng / 1E5));
     }
     return points;
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -305,7 +396,14 @@ class _MapPageState extends State<MapPage> {
                   initialCameraPosition: CameraPosition(target: _kigaliCenter, zoom: 12),
                   markers: markers,
                   polylines: polylines,
-                  onMapCreated: (controller) => mapController = controller,
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
+                  onMapCreated: (controller) {
+                    mapController = controller;
+                    if (_selectedPickup != null) {
+                      mapController.animateCamera(CameraUpdate.newLatLngZoom(_selectedPickup!, 15));
+                    }
+                  },
                   onTap: _updateManualPickup,
                 ),
                 Positioned(
@@ -334,8 +432,10 @@ class _MapPageState extends State<MapPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Driver Distance: ${distanceInKm.toStringAsFixed(2)} km', style: const TextStyle(fontSize: 16)),
-                Text('ETA: $estimatedTimeInMin min', style: const TextStyle(fontSize: 16)),
+                Text('Driver Distance: ${distanceInKm.toStringAsFixed(2)} km',
+                    style: const TextStyle(fontSize: 16)),
+                Text('ETA: $_etaCountdown min',
+                    style: const TextStyle(fontSize: 16, color: Colors.red)),
               ],
             ),
           ],

@@ -282,11 +282,11 @@ class _DriverMapPageState extends State<DriverMapPage> {
       double? lat = data['latitude']?.toDouble();
       double? lng = data['longitude']?.toDouble();
 
-      if (lat != null && lng != null) {
+      if (lng != null) {
         double distance = _calculateDistance(
           _currentPosition.latitude,
           _currentPosition.longitude,
-          lat,
+          lat!,
           lng,
         );
         if (distance <= 100) count++;
