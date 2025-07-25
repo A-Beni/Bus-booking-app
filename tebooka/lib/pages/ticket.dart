@@ -5,6 +5,7 @@ import 'package:barcode_widget/barcode_widget.dart';
 
 import 'booking_page.dart';
 import 'tickets_history.dart';
+import 'payment_page.dart';
 
 class TicketPage extends StatefulWidget {
   final String from;
@@ -158,6 +159,19 @@ class _TicketPageState extends State<TicketPage> {
     );
   }
 
+  void _goToPayment() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentPage(
+          amount: widget.fare,
+          passengerName: passengerName,
+          ticketId: ticketId,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tripTimeStr = "${widget.tripTime.hour.toString().padLeft(2, '0')}:${widget.tripTime.minute.toString().padLeft(2, '0')}";
@@ -177,8 +191,9 @@ class _TicketPageState extends State<TicketPage> {
         title: Text('ID $ticketId', style: const TextStyle(color: Colors.blue)),
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: Center(
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 100),
+        child: Center(
           child: Container(
             padding: const EdgeInsets.all(16),
             margin: const EdgeInsets.all(20),
@@ -196,7 +211,6 @@ class _TicketPageState extends State<TicketPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -215,8 +229,6 @@ class _TicketPageState extends State<TicketPage> {
                   ],
                 ),
                 const SizedBox(height: 20),
-
-                // Ticket Header
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: const BoxDecoration(
@@ -225,8 +237,6 @@ class _TicketPageState extends State<TicketPage> {
                   ),
                   child: const Icon(Icons.directions_bus, color: Colors.white, size: 40),
                 ),
-
-                // Trip Info
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
                   child: Row(
@@ -259,8 +269,6 @@ class _TicketPageState extends State<TicketPage> {
                   ),
                 ),
                 const Divider(),
-
-                // Passenger + Seat Info
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   child: Row(
@@ -283,8 +291,6 @@ class _TicketPageState extends State<TicketPage> {
                     ],
                   ),
                 ),
-
-                // Driver and Fare
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   child: Row(
@@ -306,8 +312,6 @@ class _TicketPageState extends State<TicketPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Barcode
                 BarcodeWidget(
                   data: ticketId,
                   barcode: Barcode.code128(),
@@ -319,13 +323,28 @@ class _TicketPageState extends State<TicketPage> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketsHistoryPage()));
-        },
-        icon: const Icon(Icons.history),
-        label: const Text('History'),
-        backgroundColor: Colors.blueAccent,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            FloatingActionButton.extended(
+              onPressed: _goToPayment,
+              icon: const Icon(Icons.payment),
+              label: const Text('Pay Now'),
+              backgroundColor: Colors.green,
+            ),
+            FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketsHistoryPage()));
+              },
+              icon: const Icon(Icons.history),
+              label: const Text('History'),
+              backgroundColor: Colors.blueAccent,
+            ),
+          ],
+        ),
       ),
     );
   }
