@@ -36,14 +36,24 @@ class _TicketPageState extends State<TicketPage> {
   String driverName = '';
   String ticketId = '';
   int standingCount = 0;
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadPassengerInfo();
-    _loadDriverInfo();
-    _loadStandingTickets();
+    _initPage();
+  }
+
+  Future<void> _initPage() async {
+    await Future.wait([
+      _loadPassengerInfo(),
+      _loadDriverInfo(),
+      _loadStandingTickets(),
+    ]);
     _generateTicketId();
+    setState(() {
+      isLoading = false;
+    });
   }
 
   Future<void> _loadPassengerInfo() async {
@@ -54,9 +64,7 @@ class _TicketPageState extends State<TicketPage> {
       if (data != null) {
         final firstName = data['firstName'] ?? '';
         final lastName = data['lastName'] ?? '';
-        setState(() {
-          passengerName = '$firstName $lastName'.trim();
-        });
+        passengerName = '$firstName $lastName'.trim();
       }
     }
   }
@@ -64,9 +72,7 @@ class _TicketPageState extends State<TicketPage> {
   Future<void> _loadDriverInfo() async {
     final doc = await FirebaseFirestore.instance.collection('drivers').doc(widget.driverId).get();
     if (doc.exists) {
-      setState(() {
-        driverName = doc.data()?['name'] ?? 'Driver';
-      });
+      driverName = doc.data()?['name'] ?? 'Driver';
     }
   }
 
@@ -89,15 +95,11 @@ class _TicketPageState extends State<TicketPage> {
       }
     }
 
-    setState(() {
-      standingCount = count;
-    });
+    standingCount = count;
   }
 
   void _generateTicketId() {
-    setState(() {
-      ticketId = DateTime.now().millisecondsSinceEpoch.toString();
-    });
+    ticketId = DateTime.now().millisecondsSinceEpoch.toString();
   }
 
   Future<void> _deleteCurrentTicket() async {
@@ -130,18 +132,15 @@ class _TicketPageState extends State<TicketPage> {
 
     if (confirmed == true) {
       await _deleteCurrentTicket();
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Booking canceled successfully')),
       );
-
       Navigator.pop(context);
     }
   }
 
   Future<void> _editBooking() async {
     await _deleteCurrentTicket();
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -176,7 +175,6 @@ class _TicketPageState extends State<TicketPage> {
   Widget build(BuildContext context) {
     final tripTimeStr = "${widget.tripTime.hour.toString().padLeft(2, '0')}:${widget.tripTime.minute.toString().padLeft(2, '0')}";
     final tripDateStr = "${widget.tripDate.day}/${widget.tripDate.month}/${widget.tripDate.year}";
-
     final allSeats = [
       ...widget.selectedSeats.map((e) => "A$e"),
       ...List.generate(standingCount, (i) => "ST")
@@ -191,161 +189,169 @@ class _TicketPageState extends State<TicketPage> {
         title: Text('ID $ticketId', style: const TextStyle(color: Colors.blue)),
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 100),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _cancelBooking,
-                      icon: const Icon(Icons.cancel),
-                      label: const Text('Cancel Booking'),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 100),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    ElevatedButton.icon(
-                      onPressed: _editBooking,
-                      icon: const Icon(Icons.edit),
-                      label: const Text('Edit Booking'),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _cancelBooking,
+                              icon: const Icon(Icons.cancel),
+                              label: const Text('Cancel Booking'),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: _editBooking,
+                              icon: const Icon(Icons.edit),
+                              label: const Text('Edit Booking'),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF3E8DF5),
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                          ),
+                          child: const Icon(Icons.directions_bus, color: Colors.white, size: 40),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('From', style: TextStyle(color: Colors.grey[600])),
+                                    Text(widget.from, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                    Text(tripTimeStr),
+                                    Text(tripDateStr),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.directions_bus, size: 30),
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('To', style: TextStyle(color: Colors.grey[600])),
+                                    Text(widget.to, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                    Text(tripTimeStr),
+                                    Text(tripDateStr),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Fullname'),
+                                  Text(passengerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  const Text('Seat(s)'),
+                                  Text(allSeats.join(', '), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              )
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Driver:'),
+                              Text(driverName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Fare:'),
+                              Text('RWF ${widget.fare.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        BarcodeWidget(
+                          data: ticketId,
+                          barcode: Barcode.code128(),
+                          width: 200,
+                          height: 80,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: isLoading
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    FloatingActionButton.extended(
+                      onPressed: _goToPayment,
+                      icon: const Icon(Icons.payment),
+                      label: const Text('Pay Now'),
+                      backgroundColor: Colors.green,
+                    ),
+                    FloatingActionButton.extended(
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketsHistoryPage()));
+                      },
+                      icon: const Icon(Icons.history),
+                      label: const Text('History'),
+                      backgroundColor: Colors.blueAccent,
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF3E8DF5),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  ),
-                  child: const Icon(Icons.directions_bus, color: Colors.white, size: 40),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('From', style: TextStyle(color: Colors.grey[600])),
-                            Text(widget.from, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            Text(tripTimeStr),
-                            Text(tripDateStr),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.directions_bus, size: 30),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('To', style: TextStyle(color: Colors.grey[600])),
-                            Text(widget.to, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            Text(tripTimeStr),
-                            Text(tripDateStr),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Fullname'),
-                          Text(passengerName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          const Text('Seat(s)'),
-                          Text(allSeats.join(', '), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Driver:'),
-                      Text(driverName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Fare:'),
-                      Text('RWF ${widget.fare.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                BarcodeWidget(
-                  data: ticketId,
-                  barcode: Barcode.code128(),
-                  width: 200,
-                  height: 80,
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            FloatingActionButton.extended(
-              onPressed: _goToPayment,
-              icon: const Icon(Icons.payment),
-              label: const Text('Pay Now'),
-              backgroundColor: Colors.green,
-            ),
-            FloatingActionButton.extended(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketsHistoryPage()));
-              },
-              icon: const Icon(Icons.history),
-              label: const Text('History'),
-              backgroundColor: Colors.blueAccent,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

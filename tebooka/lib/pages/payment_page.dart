@@ -25,26 +25,33 @@ class _PaymentPageState extends State<PaymentPage> {
   @override
   void initState() {
     super.initState();
-    Stripe.publishableKey = 'pk_test_51NxbKXSHs8Yxxxxxxx'; // Replace with your Stripe test publishable key
+    // Set your Stripe publishable key here
+    Stripe.publishableKey = 'pk_test_51RlavgQM4owSDyFaFTg1geGG73yRGcIiiDsqqh2C3SGDxIrGinP7pSkVw0Xn9mxCSC7TUgu2hUYpZtk6z3v9TtZ000yaYv3vK4';
+    Stripe.instance.applySettings();
   }
 
   Future<void> _makePayment() async {
     setState(() => isLoading = true);
 
     try {
-      // Simulate a call to backend that creates a PaymentIntent
+      // 1. Call Firebase Function to create PaymentIntent
       final response = await http.post(
-        Uri.parse('https://your-backend-url.com/create-payment-intent'), // Replace with your backend
+        Uri.parse('https://us-central1-tebooka.cloudfunctions.net/createPaymentIntent'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'amount': (widget.amount * 100).toInt()}), // Stripe requires cents
+        body: jsonEncode({'amount': (widget.amount * 100).toInt()}), // Amount in cents
       );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to create payment intent');
+      }
 
       final paymentIntent = jsonDecode(response.body);
 
+      // 2. Initialize Stripe Payment Sheet
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: paymentIntent['clientSecret'],
-          merchantDisplayName: 'SmartBus',
+          merchantDisplayName: 'TEBOOKA',
           style: ThemeMode.light,
           googlePay: const PaymentSheetGooglePay(
             merchantCountryCode: 'RW',
@@ -56,16 +63,24 @@ class _PaymentPageState extends State<PaymentPage> {
         ),
       );
 
+      // 3. Present the payment sheet
       await Stripe.instance.presentPaymentSheet();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Payment successful')),
       );
-      Navigator.pop(context);
+
+      Navigator.pop(context); // Go back to previous screen
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Payment failed: $e')),
-      );
+      if (e is StripeException) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Payment cancelled by user')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Payment failed: ${e.toString()}')),
+        );
+      }
     } finally {
       setState(() => isLoading = false);
     }
@@ -90,7 +105,11 @@ class _PaymentPageState extends State<PaymentPage> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
             ],
           ),
           child: Column(
@@ -109,7 +128,14 @@ class _PaymentPageState extends State<PaymentPage> {
                 onPressed: isLoading ? null : _makePayment,
                 icon: const Icon(Icons.lock),
                 label: isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Text('Proceed to Pay'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),

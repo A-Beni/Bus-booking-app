@@ -1,35 +1,32 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.adoris.tebooka">
 
-    <!-- Location permissions for driver live tracking -->
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="tebooka"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:label="tebooka"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
 
-        <!-- Google Maps API Key for Android -->
+        <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw" />
 
-        <!-- Firebase App Check configuration (disable or enable based on your use) -->
-        <!-- Uncomment the below line if you're using Firebase App Check and want to use the SafetyNet App Check provider -->
-        <!-- <meta-data
-            android:name="com.google.firebase.appcheck.AppCheckProviderFactory"
-            android:value="com.google.firebase.appcheck.safetynet.SafetyNetAppCheckProviderFactory" /> -->
-
-        <!-- If you want to disable Firebase App Check during development -->
+        <!-- Firebase App Check (debug mode enabled) -->
         <meta-data
             android:name="com.google.firebase.appcheck.AppCheckProviderFactory"
             android:value="com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory" />
 
+        <!-- Flutter Main Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -55,14 +52,12 @@
             android:value="2" />
     </application>
 
+    <!-- Intents/Queries for deep linking or integrations -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
-    </queries>
-
-    <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
