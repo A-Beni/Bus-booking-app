@@ -3,8 +3,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'ticket.dart';
 
-class TicketsHistoryPage extends StatelessWidget {
+class TicketsHistoryPage extends StatefulWidget {
   const TicketsHistoryPage({super.key});
+
+  @override
+  State<TicketsHistoryPage> createState() => _TicketsHistoryPageState();
+}
+
+class _TicketsHistoryPageState extends State<TicketsHistoryPage> {
+  late Future<List<Map<String, dynamic>>> _ticketFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticketFuture = fetchLast10Tickets();
+  }
 
   Future<List<Map<String, dynamic>>> fetchLast10Tickets() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -48,6 +61,52 @@ class TicketsHistoryPage extends StatelessWidget {
     return uniqueTickets;
   }
 
+  Future<void> clearTicketHistory() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('tickets')
+        .where('passengerId', isEqualTo: uid)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      await doc.reference.delete();
+    }
+
+    // Refresh UI
+    setState(() {
+      _ticketFuture = fetchLast10Tickets();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Ticket history cleared.")),
+    );
+  }
+
+  void confirmClearHistory() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Clear History"),
+        content: const Text("Are you sure you want to clear your ticket history?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await clearTicketHistory();
+            },
+            child: const Text("Clear", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,7 +115,7 @@ class TicketsHistoryPage extends StatelessWidget {
         backgroundColor: Colors.blueAccent,
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: fetchLast10Tickets(),
+        future: _ticketFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -86,7 +145,6 @@ class TicketsHistoryPage extends StatelessWidget {
               final hour = int.tryParse(timeParts[0]) ?? 0;
               final minute = int.tryParse(timeParts[1]) ?? 0;
 
-              // Ensure valid seat list
               List<int> selectedSeats = [];
               if (seatNumber is int) {
                 selectedSeats = [seatNumber];
@@ -119,6 +177,12 @@ class TicketsHistoryPage extends StatelessWidget {
             },
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: confirmClearHistory,
+        backgroundColor: const Color.fromARGB(255, 111, 255, 82),
+        child: const Icon(Icons.delete_forever),
+        tooltip: 'Clear Ticket History',
       ),
     );
   }
