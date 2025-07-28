@@ -138,110 +138,117 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> openSearchModal(TextEditingController controller) async {
-    final googlePlace = GooglePlace(googleApiKey);
-    final sessionToken = const Uuid().v4();
-    TextEditingController searchController = TextEditingController(text: controller.text);
-    List<AutocompletePrediction> predictions = [];
+Future<void> openSearchModal(TextEditingController controller) async {
+  final googlePlace = GooglePlace(googleApiKey);
+  final sessionToken = const Uuid().v4();
+  TextEditingController searchController = TextEditingController(text: controller.text);
+  List<AutocompletePrediction> predictions = [];
 
-    await showModalBottomSheet(
-      isScrollControlled: true,
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, localSetState) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: TextField(
-                        controller: searchController,
-                        autofocus: true,
-                        decoration: InputDecoration(
-                          hintText: "Search location...",
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onChanged: (input) async {
-                          if (input.isEmpty) {
-                            localSetState(() => predictions = []);
-                            return;
-                          }
-
-                          try {
-                            await Future.delayed(const Duration(milliseconds: 300));
-                            final result = await googlePlace.autocomplete.get(
-                              input,
-                              sessionToken: sessionToken,
-                              components: [Component("country", "rw")],
-                              location: LatLon(-1.9441, 30.0619),
-                              radius: 20000,
-                            );
-
-                            if (result != null &&
-                                result.predictions != null &&
-                                result.predictions!.isNotEmpty) {
-                              localSetState(() => predictions = result.predictions!);
-                            } else {
-                              localSetState(() => predictions = []);
-                            }
-                          } catch (_) {
-                            localSetState(() => predictions = []);
-                          }
-                        },
+  await showModalBottomSheet(
+    isScrollControlled: true,
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, localSetState) {
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      controller: searchController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: "Search location...",
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       ),
+                      onChanged: (input) async {
+                        if (input.trim().isEmpty) {
+                          localSetState(() => predictions = []);
+                          return;
+                        }
+
+                        try {
+                          final result = await googlePlace.autocomplete.get(
+                            input.trim(),
+                            sessionToken: sessionToken,
+                            components: [Component("country", "rw")],
+                            location: LatLon(-1.9441, 30.0619),
+                            radius: 20000,
+                          );
+
+                          if (result != null &&
+                              result.predictions != null &&
+                              result.predictions!.isNotEmpty) {
+                            localSetState(() => predictions = result.predictions!);
+                          } else {
+                            localSetState(() => predictions = []);
+                          }
+                        } catch (e) {
+                          debugPrint("Autocomplete error: $e");
+                          localSetState(() => predictions = []);
+                        }
+                      },
                     ),
-                    const SizedBox(height: 10),
-                    predictions.isNotEmpty
-                        ? SizedBox(
-                            height: 300,
-                            child: ListView.builder(
-                              itemCount: predictions.length,
-                              itemBuilder: (context, index) {
-                                final prediction = predictions[index];
-                                return ListTile(
-                                  leading: const Icon(Icons.location_on, color: Colors.grey),
-                                  title: Text(prediction.description ?? '', style: const TextStyle(fontSize: 14)),
-                                  subtitle: prediction.structuredFormatting?.secondaryText != null
-                                      ? Text(prediction.structuredFormatting!.secondaryText!, style: const TextStyle(fontSize: 12, color: Colors.grey))
-                                      : null,
-                                  onTap: () {
-                                    controller.text = prediction.description ?? '';
-                                    Navigator.pop(context);
-                                    setState(() {});
-                                  },
-                                );
-                              },
-                            ),
-                          )
-                        : Container(
-                            height: 100,
-                            padding: const EdgeInsets.all(16),
-                            child: Center(
-                              child: Text(
-                                searchController.text.isEmpty
-                                    ? "Start typing to search locations in Rwanda"
-                                    : "No suggestions found. Try different keywords.",
-                                style: const TextStyle(color: Colors.grey, fontSize: 14),
-                                textAlign: TextAlign.center,
-                              ),
+                  ),
+                  const SizedBox(height: 10),
+                  predictions.isNotEmpty
+                      ? SizedBox(
+                          height: 300,
+                          child: ListView.builder(
+                            itemCount: predictions.length,
+                            itemBuilder: (context, index) {
+                              final prediction = predictions[index];
+                              return ListTile(
+                                leading: const Icon(Icons.location_on, color: Colors.grey),
+                                title: Text(
+                                  prediction.description ?? '',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                subtitle: prediction.structuredFormatting?.secondaryText != null
+                                    ? Text(
+                                        prediction.structuredFormatting!.secondaryText!,
+                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                      )
+                                    : null,
+                                onTap: () {
+                                  controller.text = prediction.description ?? '';
+                                  Navigator.pop(context);
+                                  setState(() {}); // refresh main form
+                                },
+                              );
+                            },
+                          ),
+                        )
+                      : Container(
+                          height: 100,
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: Text(
+                              searchController.text.trim().isEmpty
+                                  ? "Start typing to search locations in Rwanda"
+                                  : "No suggestions found. Try different keywords.",
+                              style: const TextStyle(color: Colors.grey, fontSize: 14),
+                              textAlign: TextAlign.center,
                             ),
                           ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                        ),
+                  const SizedBox(height: 20),
+                ],
               ),
-            );
-          },
-        );
-      },
-    );
-  }
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +263,7 @@ class _HomePageState extends State<HomePage> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.receipt_long_rounded), label: "Booking"),
           NavigationDestination(icon: Icon(Icons.map_rounded), label: "Map"),
-          NavigationDestination(icon: Icon(Icons.notifications_active_outlined), label: "Alerts"),
+          
           NavigationDestination(icon: Icon(Icons.logout_rounded), label: "Logout"),
         ],
         onDestinationSelected: (index) async {
