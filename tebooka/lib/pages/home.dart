@@ -10,7 +10,6 @@ import 'profile.dart';
 import 'map.dart';
 import 'booking_page.dart';
 import 'login.dart';
-import 'notifications_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isDarkMode;
@@ -59,14 +58,6 @@ class _HomePageState extends State<HomePage> {
         _currentImageIndex = (_currentImageIndex + 1) % carouselImages.length;
       });
     });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.showThankYouMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Thank you for booking your seats!')),
-        );
-      }
-    });
   }
 
   @override
@@ -89,166 +80,113 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> getCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location services are disabled.')),
-      );
-      return;
-    }
+    if (!serviceEnabled) return;
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission denied.')),
-        );
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
         return;
       }
     }
 
-    if (permission == LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission permanently denied.')),
-      );
-      return;
-    }
+    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
 
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-
-    final googlePlace = GooglePlace(googleApiKey);
-    final response = await googlePlace.search.getNearBySearch(
-      Location(lat: position.latitude, lng: position.longitude),
-      10,
-    );
-
-    if (response != null &&
-        response.results != null &&
-        response.results!.isNotEmpty) {
-      final place = response.results!.first;
-      setState(() {
-        fromController.text = place.name ?? "Current Location";
-      });
-    } else {
-      setState(() {
-        fromController.text = "Current Location (${position.latitude}, ${position.longitude})";
-      });
-    }
+    setState(() {
+      fromController.text = "Current Location (${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)})";
+    });
   }
 
-Future<void> openSearchModal(TextEditingController controller) async {
-  final googlePlace = GooglePlace(googleApiKey);
-  final sessionToken = const Uuid().v4();
-  TextEditingController searchController = TextEditingController(text: controller.text);
-  List<AutocompletePrediction> predictions = [];
+  Future<void> openSearchModal(TextEditingController controller) async {
+    final googlePlace = GooglePlace(googleApiKey);
+    final sessionToken = const Uuid().v4();
+    TextEditingController searchController = TextEditingController(text: controller.text);
+    List<AutocompletePrediction> predictions = [];
 
-  await showModalBottomSheet(
-    isScrollControlled: true,
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, localSetState) {
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: TextField(
-                      controller: searchController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: "Search location...",
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onChanged: (input) async {
-                        if (input.trim().isEmpty) {
-                          localSetState(() => predictions = []);
-                          return;
-                        }
+    await showModalBottomSheet(
+      isScrollControlled: true,
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, localSetState) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        controller: searchController,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: "Search location...",
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onChanged: (input) async {
+                          if (input.isEmpty) {
+                            localSetState(() => predictions = []);
+                            return;
+                          }
 
-                        try {
-                          final result = await googlePlace.autocomplete.get(
-                            input.trim(),
-                            sessionToken: sessionToken,
-                            components: [Component("country", "rw")],
-                            location: LatLon(-1.9441, 30.0619),
-                            radius: 20000,
-                          );
+                          try {
+                            await Future.delayed(const Duration(milliseconds: 300));
+                            final result = await googlePlace.autocomplete.get(
+                              input,
+                              sessionToken: sessionToken,
+                              components: [Component("country", "rw")],
+                              location: LatLon(-1.9441, 30.0619),
+                              radius: 20000,
+                            );
 
-                          if (result != null &&
-                              result.predictions != null &&
-                              result.predictions!.isNotEmpty) {
-                            localSetState(() => predictions = result.predictions!);
-                          } else {
+                            if (result != null && result.predictions != null && result.predictions!.isNotEmpty) {
+                              localSetState(() => predictions = result.predictions!);
+                            } else {
+                              localSetState(() => predictions = []);
+                            }
+                          } catch (_) {
                             localSetState(() => predictions = []);
                           }
-                        } catch (e) {
-                          debugPrint("Autocomplete error: $e");
-                          localSetState(() => predictions = []);
-                        }
-                      },
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  predictions.isNotEmpty
-                      ? SizedBox(
-                          height: 300,
-                          child: ListView.builder(
-                            itemCount: predictions.length,
-                            itemBuilder: (context, index) {
-                              final prediction = predictions[index];
-                              return ListTile(
-                                leading: const Icon(Icons.location_on, color: Colors.grey),
-                                title: Text(
-                                  prediction.description ?? '',
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                                subtitle: prediction.structuredFormatting?.secondaryText != null
-                                    ? Text(
-                                        prediction.structuredFormatting!.secondaryText!,
-                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                      )
-                                    : null,
-                                onTap: () {
-                                  controller.text = prediction.description ?? '';
-                                  Navigator.pop(context);
-                                  setState(() {}); // refresh main form
-                                },
-                              );
-                            },
-                          ),
-                        )
-                      : Container(
-                          height: 100,
-                          padding: const EdgeInsets.all(16),
-                          child: Center(
-                            child: Text(
-                              searchController.text.trim().isEmpty
-                                  ? "Start typing to search locations in Rwanda"
-                                  : "No suggestions found. Try different keywords.",
-                              style: const TextStyle(color: Colors.grey, fontSize: 14),
-                              textAlign: TextAlign.center,
+                    const SizedBox(height: 10),
+                    predictions.isNotEmpty
+                        ? SizedBox(
+                            height: 300,
+                            child: ListView.builder(
+                              itemCount: predictions.length,
+                              itemBuilder: (context, index) {
+                                final prediction = predictions[index];
+                                return ListTile(
+                                  leading: const Icon(Icons.location_on, color: Colors.grey),
+                                  title: Text(prediction.description ?? '', style: const TextStyle(fontSize: 14)),
+                                  subtitle: prediction.structuredFormatting?.secondaryText != null
+                                      ? Text(prediction.structuredFormatting!.secondaryText!, style: const TextStyle(fontSize: 12, color: Colors.grey))
+                                      : null,
+                                  onTap: () {
+                                    controller.text = prediction.description ?? '';
+                                    Navigator.pop(context);
+                                    setState(() {});
+                                  },
+                                );
+                              },
                             ),
-                          ),
-                        ),
-                  const SizedBox(height: 20),
-                ],
+                          )
+                        : const SizedBox(height: 100),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -263,49 +201,47 @@ Future<void> openSearchModal(TextEditingController controller) async {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.receipt_long_rounded), label: "Booking"),
           NavigationDestination(icon: Icon(Icons.map_rounded), label: "Map"),
-          
           NavigationDestination(icon: Icon(Icons.logout_rounded), label: "Logout"),
         ],
         onDestinationSelected: (index) async {
           switch (index) {
             case 0:
-              if (fromController.text.isEmpty || toController.text.isEmpty || tripDate == null || tripTime == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Please complete the trip details")),
-                );
-                return;
-              }
-              Navigator.push(context, MaterialPageRoute(builder: (_) => BookingPage(
-                from: fromController.text.trim(),
-                to: toController.text.trim(),
-                tripDate: tripDate!,
-                tripTime: tripTime!,
-                seats: seatCount,
-              )));
+              if (fromController.text.isEmpty || toController.text.isEmpty || tripDate == null || tripTime == null) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BookingPage(
+                    from: fromController.text.trim(),
+                    to: toController.text.trim(),
+                    tripDate: tripDate!,
+                    tripTime: tripTime!,
+                    seats: seatCount,
+                  ),
+                ),
+              );
               break;
             case 1:
-              if (toController.text.isNotEmpty) {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => MapPage(
-                  passengerDestination: toController.text.trim(),
-                  seats: seatCount,
-                )));
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Please select destination first")),
-                );
-              }
+              if (toController.text.isEmpty) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MapPage(
+                    passengerDestination: toController.text.trim(),
+                    seats: seatCount,
+                  ),
+                ),
+              );
               break;
             case 2:
-              Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsPage()));
-              break;
-            case 3:
               await FirebaseAuth.instance.signOut();
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => LoginPage(
-                  isDarkMode: widget.isDarkMode,
-                  onThemeChanged: widget.onThemeChanged,
-                )),
+                MaterialPageRoute(
+                  builder: (_) => LoginPage(
+                    isDarkMode: widget.isDarkMode,
+                    onThemeChanged: widget.onThemeChanged,
+                  ),
+                ),
               );
               break;
           }
@@ -321,15 +257,21 @@ Future<void> openSearchModal(TextEditingController controller) async {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Hey, $firstName", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
+                  Text(
+                    "Hey, $firstName",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
+                  ),
                   GestureDetector(
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => ProfilePage(
-                          isDarkMode: widget.isDarkMode,
-                          onThemeChanged: widget.onThemeChanged,
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProfilePage(
+                            isDarkMode: widget.isDarkMode,
+                            onThemeChanged: widget.onThemeChanged,
+                          ),
                         ),
-                      ));
+                      );
                     },
                     child: const CircleAvatar(
                       radius: 20,
@@ -340,7 +282,10 @@ Future<void> openSearchModal(TextEditingController controller) async {
                 ],
               ),
               const SizedBox(height: 8),
-              Text("What is your next trip?", style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.6))),
+              Text(
+                "What is your next trip?",
+                style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.6)),
+              ),
               const SizedBox(height: 14),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
@@ -350,7 +295,7 @@ Future<void> openSearchModal(TextEditingController controller) async {
                   width: double.infinity,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
@@ -385,10 +330,6 @@ Future<void> openSearchModal(TextEditingController controller) async {
                           ),
                         ),
                       );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Please select destination first")),
-                      );
                     }
                   },
                   icon: const Icon(Icons.map_rounded, size: 20),
@@ -416,24 +357,31 @@ Future<void> openSearchModal(TextEditingController controller) async {
         const SizedBox(height: 10),
         labelWithIcon("To", Icons.flag, toController, () => openSearchModal(toController)),
         const SizedBox(height: 10),
-        tripDateTimePicker("Choose your trip date", tripDate == null
-            ? "Pick a date"
-            : "${tripDate!.day}/${tripDate!.month}/${tripDate!.year}", () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: tripDate ?? DateTime.now(),
-            firstDate: DateTime.now(),
-            lastDate: DateTime(2100),
-          );
-          if (picked != null) setState(() => tripDate = picked);
-        }),
+        tripDateTimePicker(
+          "Choose your trip date",
+          tripDate == null ? "Pick a date" : "${tripDate!.day}/${tripDate!.month}/${tripDate!.year}",
+          () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: tripDate ?? DateTime.now(),
+              firstDate: DateTime.now(),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) setState(() => tripDate = picked);
+          },
+        ),
         const SizedBox(height: 10),
-        tripDateTimePicker("Choose your trip time", tripTime == null
-            ? "Pick time"
-            : "${tripTime!.hour}:${tripTime!.minute.toString().padLeft(2, '0')}", () async {
-          final picked = await showTimePicker(context: context, initialTime: tripTime ?? TimeOfDay.now());
-          if (picked != null) setState(() => tripTime = picked);
-        }),
+        tripDateTimePicker(
+          "Choose your trip time",
+          tripTime == null ? "Pick time" : "${tripTime!.hour}:${tripTime!.minute.toString().padLeft(2, '0')}",
+          () async {
+            final picked = await showTimePicker(
+              context: context,
+              initialTime: tripTime ?? TimeOfDay.now(),
+            );
+            if (picked != null) setState(() => tripTime = picked);
+          },
+        ),
         const SizedBox(height: 10),
         const Text("Seats", style: TextStyle(fontSize: 13)),
         const SizedBox(height: 4),

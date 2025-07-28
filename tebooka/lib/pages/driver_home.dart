@@ -21,7 +21,7 @@ class DriverHomePage extends StatefulWidget {
 class _DriverHomePageState extends State<DriverHomePage> with SingleTickerProviderStateMixin {
   TextEditingController fromController = TextEditingController();
   TextEditingController toController = TextEditingController();
-  int _selectedIndex = 1;
+  int _selectedIndex = 0;
 
   final String googleApiKey = "AIzaSyD4K4zUAbA8AxCRj3068Y3wRIJLWmxG6Rw";
   bool _darkMode = false;
@@ -192,34 +192,22 @@ class _DriverHomePageState extends State<DriverHomePage> with SingleTickerProvid
     setState(() => _selectedIndex = index);
 
     switch (index) {
-      case 0:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => UsersPage(
-              from: fromController.text,
-              to: toController.text,
-              isDarkMode: _darkMode,
-              onThemeChanged: _onThemeChanged,
-            ),
-          ),
-        );
-        break;
-      case 1:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DriverMapPage(
-              from: fromController.text,
-              to: toController.text,
-            ),
-          ),
-        );
-        break;
-      case 2:
-        _handleLogout();
-        break;
-    }
+  case 0:
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DriverMapPage(
+          from: fromController.text,
+          to: toController.text,
+        ),
+      ),
+    );
+    break;
+  case 1:
+    _handleLogout();
+    break;
+}
+
   }
 
   Future<void> _handleLogout() async {
@@ -644,7 +632,7 @@ class _DriverHomePageState extends State<DriverHomePage> with SingleTickerProvid
         selectedLabelStyle: TextStyle(color: textColor),
         unselectedItemColor: _darkMode ? Colors.grey[500] : Colors.grey[700],
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Users'),
+          
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
           BottomNavigationBarItem(icon: Icon(Icons.logout), label: 'Logout'),
         ],
