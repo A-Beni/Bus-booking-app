@@ -29,10 +29,6 @@
   * Cancel or edit bookings (within a 10-minute window before departure).
   * Booking generates a digital ticket with QR code.
 
-* 📩 **Email Notifications**
-
-  * Confirmation sent via email after booking.
-  * Driver gets notified of new passenger.
 
 ---
 
@@ -127,6 +123,94 @@ TicketPage (Digital Ticket Display with QR)
 
 ---
 
-## ✨ License
+🚀 **Installation Instructions**
+You can install Tebooka in one of two ways:
 
-This project is licensed under the MIT License.
+Option 1: Install APK (Recommended for End-Users)
+Download the latest APK file from the Releases section or from this direct link (insert your deployed link here).
+
+On your Android device:
+
+Open Settings > Security.
+
+Enable Install from Unknown Sources.
+
+Open the downloaded APK and follow the on-screen instructions to install.
+
+Launch Tebooka and sign in with your email to begin booking!
+
+Option 2: Run from Source (For Developers)
+Clone the repo:
+
+
+git clone https://github.com/your-username/tebooka.git
+cd tebooka
+Install Flutter dependencies:
+
+
+flutter pub get
+Connect a device or start an emulator, then run:
+
+bash
+Copy
+Edit
+flutter run
+Firebase Configuration:
+
+Ensure you’ve set up google-services.json in android/app/.
+
+Set up Firebase project and enable required services (Auth, Firestore, Maps).
+
+For development support, refer to the /docs directory or contact the maintainers.
+
+**📄 License, Copyright & Privacy Policy — Tebooka**
+
+**⚖️ End-User License Agreement (EULA)**
+
+By installing, accessing, or using Tebooka, you agree to be bound by the terms of this End-User License Agreement. If you do not agree to the terms of this agreement, do not install or use the application.
+
+License Grant: Tebooka is licensed, not sold. You are granted a limited, non-transferable, revocable, non-exclusive license to download, install, and use the app for personal, non-commercial use.
+
+**Restrictions**: You may not:
+
+Reverse engineer, decompile, or disassemble any part of the app.
+
+Distribute or sublicense the application to others.
+
+Use the app for any unlawful purpose.
+
+Violation of these terms may result in termination of access and possible legal action.
+
+© Copyright Notice
+Copyright © 2025 Tebooka Team. All rights reserved.
+
+This project, including all its source code, documentation, designs, and media assets, is the intellectual property of the Tebooka Team.
+
+Unauthorized copying, reuse, or distribution of the codebase or its elements is strictly prohibited without express written permission.
+
+**🔒 Privacy Policy**
+
+Tebooka respects and protects your privacy. By using this app, you agree to the collection and use of data in accordance with this policy:
+
+What We Collect:
+
+Your email address and authentication details (via Firebase).
+
+Location data (used to find nearby buses and drivers).
+
+Booking details such as route, time, and seat selection.
+
+How We Use It:
+
+To improve your travel experience, suggest nearby drivers, and manage bookings in real time.
+
+We do not sell, rent, or share your personal data with third parties for marketing purposes.
+
+Data Storage:
+
+All data is securely stored in Google Firebase and encrypted in transit.
+
+User Rights:
+
+You may request deletion of your data by contacting the Tebooka support team via the app or email.
+
