@@ -181,8 +181,8 @@ class _TicketsHistoryPageState extends State<TicketsHistoryPage> {
       floatingActionButton: FloatingActionButton(
         onPressed: confirmClearHistory,
         backgroundColor: const Color.fromARGB(255, 111, 255, 82),
-        child: const Icon(Icons.delete_forever),
         tooltip: 'Clear Ticket History',
+        child: const Icon(Icons.delete_forever),
       ),
     );
   }

@@ -8,7 +8,6 @@ import 'package:uuid/uuid.dart';
 
 import 'driver_map.dart';
 import 'driver_profile.dart';
-import 'users.dart';
 import 'login.dart';
 
 class DriverHomePage extends StatefulWidget {
