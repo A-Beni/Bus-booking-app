@@ -127,7 +127,7 @@ class _BookingPageState extends State<BookingPage> {
           ),
         );
 
-        // ✅ Fixed FCM token block
+        //  FCM token block
         try {
           final settings = await FirebaseMessaging.instance.requestPermission();
           if (settings.authorizationStatus != AuthorizationStatus.authorized) {
@@ -153,9 +153,9 @@ class _BookingPageState extends State<BookingPage> {
                 '${_tripDate.day}/${_tripDate.month} at ${_tripTime.format(context)} has been confirmed.',
           });
 
-          print("✅ FCM Notification result: ${result.data}");
+          print(" FCM Notification result: ${result.data}");
         } catch (e) {
-          print('❌ Error sending FCM notification: $e');
+          print(' Error sending FCM notification: $e');
         }
 
         await Future.delayed(const Duration(seconds: 2));
@@ -177,13 +177,13 @@ class _BookingPageState extends State<BookingPage> {
         );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error booking tickets: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(' Error booking tickets: $e'), backgroundColor: Colors.red),
         );
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Please select all seats before confirming.'),
+          content: Text(' Please select all seats before confirming.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -276,7 +276,7 @@ class _BookingPageState extends State<BookingPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Please select the exact number of seats and standing spots.'),
+            content: Text(' Please select the exact number of seats and standing spots.'),
             backgroundColor: Colors.orange,
           ),
         );

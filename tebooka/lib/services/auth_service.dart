@@ -10,7 +10,7 @@ class AuthService {
       String password,
       String firstName,
       String lastName,
-      String role) async { // 'role' added here
+      String role) async { // 'role' 
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,

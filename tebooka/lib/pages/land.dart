@@ -55,7 +55,7 @@ class _LandPageState extends State<LandPage> {
 
             const SizedBox(height: 20),
 
-            // 🧭 Main Title
+            //  Main Title
             const Text(
               "Find your trip",
               style: TextStyle(
@@ -67,7 +67,7 @@ class _LandPageState extends State<LandPage> {
 
             const SizedBox(height: 16),
 
-            // 📍 Subtitle
+            //  Subtitle
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 40),
               child: Text(

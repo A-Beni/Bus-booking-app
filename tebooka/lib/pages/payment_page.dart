@@ -74,11 +74,11 @@ class _PaymentPageState extends State<PaymentPage> {
     } catch (e) {
       if (e is StripeException) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('❌ Payment cancelled by user')),
+          const SnackBar(content: Text(' Payment cancelled by user')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Payment failed: ${e.toString()}')),
+          SnackBar(content: Text(' Payment failed: ${e.toString()}')),
         );
       }
     } finally {

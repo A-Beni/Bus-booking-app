@@ -45,7 +45,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: ${e.toString()}')),
+        SnackBar(content: Text(' Error: ${e.toString()}')),
       );
     } finally {
       setState(() => _isLoading = false);
